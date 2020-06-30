@@ -28,9 +28,6 @@ read_filter_ecker_data <- function(filename, opts, sample_metadata = NULL,
   if (is.null(sample_metadata) & is_differential) {
     stop("Need to provide sample metadata object for differential analysis!")
   }
-  if (is_differential & is_downsampling) {
-    stop("Cannot perform both differential and downsampling analysis!")
-  }
   # What grouping we will perform
   if (is_differential) {
     met_groups <- c("Feature", "anno", "group")
