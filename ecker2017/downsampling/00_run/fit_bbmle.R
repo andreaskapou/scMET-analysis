@@ -56,5 +56,5 @@ df <- Y[, bb_mle(cbind(total_reads, met_reads)), by = c("Feature")] %>%
 ## Save ##
 rep_dir <- paste0(outdir, "/rep", replicate, "/")
 if (!dir.exists(rep_dir)) { dir.create(rep_dir, recursive = TRUE) }
-fwrite(df, sprintf("%s/%s_%s_%s_%s_mle.txt.gz", rep_dir, anno, "Inh", N_cells), sep = "\t")
+fwrite(df, sprintf("%s/%s_%s_%s_mle.txt.gz", rep_dir, anno, "Inh", N_cells), sep = "\t")
 cat("Finished!!\n")
