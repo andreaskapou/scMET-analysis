@@ -15,7 +15,8 @@ for (( i=1; i <= $rep; i++ )); do
                         -o ${logPath}/vb_orG_${or}_${c}_${cpg}_${i}.out \
                         -e ${logPath}/vb_orG_${or}_${c}_${cpg}_${i}.error \
                         -v REP=$i,CELLS=$c,CPGS=$cpg,ORMU=$or,MCMC=$useMCMC r02_fit.sh"
-      eval $my_command
+        eval $my_command
+      done
     done
   done
 done
