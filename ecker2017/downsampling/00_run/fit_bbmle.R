@@ -43,11 +43,11 @@ if (is_test) {
 ################################################
 ## Fit Beta binomial maximum likelihood model ##
 # Obtain summary stats
-summ_stats <- met[, list(gauss_mean = mean(met_reads / total_reads),
+summ_stats <- Y[, list(gauss_mean = mean(met_reads / total_reads),
                          gauss_var = var(met_reads / total_reads),
                          cpgs = mean(total_reads), cells = .N), by = c("Feature")]
 print("Fitting beta binomial model using maximum likelihood...")
-df <- met[, bb_mle(cbind(total_reads, met_reads)), by = c("Feature")] %>%
+df <- Y[, bb_mle(cbind(total_reads, met_reads)), by = c("Feature")] %>%
   .[, anno := anno] %>% .[, gauss_mean := summ_stats$gauss_mean] %>%
   .[, gauss_var := summ_stats$gauss_var] %>%
   .[, cpgs := summ_stats$cpgs] %>% .[, cells := summ_stats$cells]
