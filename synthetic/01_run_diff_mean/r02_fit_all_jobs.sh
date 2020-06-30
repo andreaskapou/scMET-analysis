@@ -3,7 +3,7 @@
 # Run the program
 cellArray=( 20 50 100 200 500)
 cpgs=(15 50)
-orGamma=( 2 3 5 )
+orMu=( 2 3 5 )
 useMCMC="" # to use MCMC set it to "--mcmc"
 logPath=" logs/"
 rep=10 # Number of replications
