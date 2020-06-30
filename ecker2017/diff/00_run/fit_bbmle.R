@@ -1,6 +1,7 @@
 # Load libraries
 suppressPackageStartupMessages(library(scMET))
 suppressPackageStartupMessages(library(argparse))
+set.seed(123)
 
 ################
 ## Load settings
