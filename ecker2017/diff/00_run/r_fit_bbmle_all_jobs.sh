@@ -4,8 +4,8 @@
 declare -a annos=("distal_H3K27ac_cortex"
                   "H3K4me1_cortex"
                   "prom_2000_2000")
-
-declare -a groups=("Inhibitory" "Excitatory")
+declare -a groups=("Inhibitory"
+                   "Excitatory")
 # get length of annos
 annoslength=${#annos[@]}
 groupslength=${#groups[@]}
