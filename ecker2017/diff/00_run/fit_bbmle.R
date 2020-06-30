@@ -21,22 +21,12 @@ outdir <- args$outdir
 is_test <- isTRUE(args$test)
 message("Test mode: ", is_test)
 
-################
-## Model settings (mostly keeping default parameters)
-opts$iter <- ifelse(use_mcmc, 2000, 50000)
-opts$algorithm <- ifelse(use_mcmc, "NUTS", "meanfield")
-opts$chains <- 1
-if (use_mcmc) {
-  opts$chains <- ifelse(is_test, 1, 2)
-}
-opts$n_cores <- opts$chains
 # Subset features (for testing)
-if (is_test) { N_feat <- 200; opts$iter <- 2000 }
+if (is_test) { N_feat <- 200 }
 
 ################
 # Define broad groups of cells
 opts$groups <- unique(sample_metadata$Neuron_type1)
-
 
 ####################################
 ## Load / filter methylation data ##
