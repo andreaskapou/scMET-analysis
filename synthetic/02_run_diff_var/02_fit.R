@@ -11,7 +11,7 @@ io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
   io$out_dir <- "~/datasets/scMET/synthetic/diff_var/"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
-  io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_analysis/data/synthetic/diff_var/"
+  io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET-analysis/data/synthetic/diff_var/"
 } else {
   stop("Computer not recognised")
 }
