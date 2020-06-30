@@ -8,7 +8,7 @@ suppressPackageStartupMessages(library(scMET))
 ##------------------
 io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
-  io$out_dir <- "~/datasets/scMET/synthetic/scalability/data/"
+  io$out_dir <- "~/datasets/scMET_ms/synthetic/scalability/data/"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
   io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_ms/synthetic/scalability/data/"
 } else {

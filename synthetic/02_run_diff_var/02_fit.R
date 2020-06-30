@@ -9,7 +9,7 @@ suppressPackageStartupMessages(library(argparse))
 ##------------------
 io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
-  io$out_dir <- "~/datasets/scMET/synthetic/diff_var/data/"
+  io$out_dir <- "~/datasets/scMET_ms/synthetic/diff_var/data/"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
   io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_ms/synthetic/diff_var/data/"
 } else {

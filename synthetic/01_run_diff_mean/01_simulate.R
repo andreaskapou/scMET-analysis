@@ -8,9 +8,9 @@ suppressPackageStartupMessages(library(scMET))
 ##------------------
 io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
-  io$out_dir <- "~/datasets/scMET/synthetic/diff_mean/"
+  io$out_dir <- "~/datasets/scMET_ms/synthetic/diff_mean/data/"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
-  io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_ms/data/synthetic/diff_mean/"
+  io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_ms/synthetic/diff_mean/data/"
 } else {
   stop("Computer not recognised")
 }

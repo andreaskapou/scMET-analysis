@@ -61,7 +61,7 @@ X <- read_cpg_density(filename = io$cpg_density, feature_names = unique(Y$Featur
                       annotation = anno)
 
 ######################################
-## Fit scMET model ##
+## Fit scMET model
 ifelse(use_mcmc, "Fitting model using MCMC...", "Fitting model using VB...")
 print(date())
 # Fit the model
@@ -72,26 +72,11 @@ fit <- scmet(Y = Y, X = X, L = 4, use_mcmc = use_mcmc, use_eb = TRUE,
              n_cores = opts$n_cores, lambda = 4)
 print(date())
 
-
-################################################################
-## Extract summary statistics for the posterior distributions ##
-# Function for computing posterior summary
-posterior_summary <- function(dt){
-  return(data.table("posterior_median" = matrixStats::colMedians(dt),
-                    "posterior_sd" = apply(dt, 2, sd)))
-}
-dt_mu <- posterior_summary(fit$posterior$mu) %>% setnames(c("mu_median","mu_sd"))
-dt_gamma <- posterior_summary(fit$posterior$gamma) %>% setnames(c("gamma_median","gamma_sd"))
-dt_epsilon <- posterior_summary(fit$posterior$epsilon) %>% setnames(c("epsilon_median","epsilon_sd"))
-summ_stats <- fit$Y[, list(gauss_mean = mean(met_reads / total_reads),
-                           gauss_var = var(met_reads / total_reads),
-                           cpgs = mean(total_reads), cells = .N), by = c("Feature")]
-df <- do.call("cbind", list(dt_mu, dt_gamma, dt_epsilon, summ_stats)) %>% as.data.table %>%
-  .[, Feature := fit$feature_names] %>% .[, anno := anno]
-
-
 ##########
 ## Save ##
+# Extract parameter summaries and store them in separate txt file
+df <- extract_param_summaries(scmet_obj = fit, anno = anno)
+
 cat("Storing results ...\n")
 mode <- ifelse(use_mcmc, "mcmc", "vb")
 rep_dir <- paste0(outdir, "/rep", replicate, "/")

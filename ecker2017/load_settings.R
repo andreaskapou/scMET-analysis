@@ -2,6 +2,7 @@
 suppressPackageStartupMessages(library(scMET))
 suppressPackageStartupMessages(library(data.table))
 suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(matrixStats))
 
 # Read CpG density information
 # will be used as covariate for regression on mean methylation.
@@ -107,6 +108,32 @@ read_filter_ecker_data <- function(filename, opts, sample_metadata = NULL,
   met <- met[order(Feature), ]
 
   return(met)
+}
+
+
+# Extract parameter summaries
+extract_param_summaries <- function(scmet_obj, anno) {
+  # Function for computing posterior summary
+  posterior_summary <- function(dt){
+    return(data.table("posterior_median" = colMedians(dt),
+                      "posterior_sd" = apply(dt, 2, sd)))
+  }
+  dt_mu <- posterior_summary(scmet_obj$posterior$mu) %>%
+    setnames(c("mu_median","mu_sd"))
+  dt_gamma <- posterior_summary(scmet_obj$posterior$gamma) %>%
+    setnames(c("gamma_median","gamma_sd"))
+  dt_epsilon <- posterior_summary(scmet_obj$posterior$epsilon) %>%
+    setnames(c("epsilon_median","epsilon_sd"))
+  summ_stats <- scmet_obj$Y[, list(gauss_mean = mean(met_reads / total_reads),
+                                   gauss_var = var(met_reads / total_reads),
+                                   binom_mean = mean(met_reads / total_reads),
+                                   binom_var = mean(met_reads / total_reads) *
+                                     (1 - mean(met_reads / total_reads)),
+                                   cpgs = mean(total_reads), cells = .N),
+                            by = c("Feature")]
+  df <- do.call("cbind", list(dt_mu, dt_gamma, dt_epsilon, summ_stats)) %>%
+    as.data.table %>% .[, Feature := scmet_obj$feature_names] %>% .[, anno := anno]
+  return(df)
 }
 
 
