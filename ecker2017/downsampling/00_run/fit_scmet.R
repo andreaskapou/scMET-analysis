@@ -5,6 +5,8 @@ suppressPackageStartupMessages(library(argparse))
 ################
 ## Load settings
 source("../../load_settings.R")
+# Set to smaller value due to downsampling to small number of cells
+opts$min.cells <- 5
 
 ################################
 ## Initialize argument parser ##
