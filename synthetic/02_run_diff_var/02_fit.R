@@ -9,9 +9,9 @@ suppressPackageStartupMessages(library(argparse))
 ##------------------
 io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
-  io$out_dir <- "~/datasets/scMET/synthetic/diff_var/"
+  io$out_dir <- "~/datasets/scMET/synthetic/diff_var/data/"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
-  io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_ms/data/synthetic/diff_var/"
+  io$out_dir <- "/exports/igmm/eddie/ckapoura-XDF/scMET_ms/synthetic/diff_var/data/"
 } else {
   stop("Computer not recognised")
 }
@@ -61,7 +61,6 @@ tol_rel_obj <- 1e-4
 n_cores <- chains
 lambda <- 4
 
-#args$test <- TRUE
 # Testing mode
 if (isTRUE(args$test)) {
   message("Testing mode...")
