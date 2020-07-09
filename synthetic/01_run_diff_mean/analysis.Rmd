@@ -1,0 +1,343 @@
+---
+title: "Power analysis for differential mean methylation"
+author: "C.A. Kapourani & R. Argelaguet"
+output: 
+  html_notebook: 
+    highlight: haddock
+    theme: cerulean
+    number_sections: true
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, results = "hide")
+
+# Create confusion matrix. Used only for assessing simulated data where ground
+# truth information is present.
+# TODO: Rewrite this function!
+compute_confusion_matrix <- function(dt, diff_an, N_cells, N_feat, b = 1) {
+  fp = fn = tp = tn <- matrix(0, ncol = 3, nrow = length(N_cells))
+  colnames(fp) = colnames(fn) = colnames(tn) = colnames(tp) <- c("mu", "gamma", "epsilon")
+  rownames(fp) = rownames(fn) = rownames(tn) = rownames(tp) <- paste0("Cells", N_cells)
+  for (i in 1:length(N_cells)) {
+    if (is.numeric(dt[[i]]$sim_dt$diff_var_features)) {
+      diff_var_feat <- 0
+    } else {
+      diff_var_feat <- as.character(dt[[i]]$sim_dt$diff_var_features$feature_name)
+    }
+    if (is.numeric(dt[[i]]$sim_dt$diff_mean_features) ) {
+      diff_mean_feat <- 0
+    } else {
+      diff_mean_feat <- as.character(dt[[i]]$sim_dt$diff_mean_features$feature_name)
+    }
+    # Extract all feature names
+    all_feat <- dt[[i]]$scmet_A$feature_names
+
+    hits <- list(diff_an[[i]]$diff_mu_summary$feature_name[
+                 which(diff_an[[i]]$diff_mu_summary$mu_diff_test %in%
+                         c( paste0(diff_an[[i]]$opts$group_label_B, "+"),
+                            paste0(diff_an[[i]]$opts$group_label_A, "+") ))],
+              diff_an[[i]]$diff_gamma_summary$feature_name[
+                which(diff_an[[i]]$diff_gamma_summary$gamma_diff_test %in%
+                      c( paste0(diff_an[[i]]$opts$group_label_B, "+"),
+                         paste0(diff_an[[i]]$opts$group_label_A, "+") ) )],
+              diff_an[[i]]$diff_epsilon_summary$feature_name[
+              which(diff_an[[i]]$diff_epsilon_summary$epsilon_diff_test %in%
+                      c( paste0(diff_an[[i]]$opts$group_label_B, "+"),
+                         paste0(diff_an[[i]]$opts$group_label_A, "+") ) )])
+    tp[i, ] <- c( sum(diff_mean_feat %in% hits[[1]]),
+                  sum(diff_var_feat %in% hits[[2]]),
+                  sum(diff_var_feat %in% hits[[3]]) )
+    
+    fp[i, ] <- c( sum(setdiff(all_feat, diff_mean_feat) %in% hits[[1]]),
+                  sum(setdiff(all_feat, diff_var_feat) %in% hits[[2]]),
+                  sum(setdiff(all_feat, diff_var_feat) %in% hits[[3]]) )
+
+    tn[i, ] <- c( sum(setdiff(all_feat, diff_mean_feat) %in% setdiff(all_feat, hits[[1]])),
+                  sum(setdiff(all_feat, diff_var_feat) %in% setdiff(all_feat, hits[[2]])),
+                  sum(setdiff(all_feat, diff_var_feat) %in% setdiff(all_feat, hits[[3]])) )
+
+    fn[i, ] <- c( sum(diff_mean_feat %in% setdiff(all_feat, hits[[1]])),
+                  sum(diff_var_feat %in% setdiff(all_feat, hits[[2]])),
+                  sum(diff_var_feat %in% setdiff(all_feat, hits[[3]])) )
+  }
+
+  # FPR: # of incorrect predicted positives divided by
+  #       total number of negatives (1 - specificity)
+  fpr <- fp / (fp + tn)
+  # FNR: # of incorrect predicted negatives divided by
+  #       total number of positives (1 - recall)
+  fnr <- fn / (fn + tp)
+  # FDR: # of incorrect predicted positives divided by
+  #       total number of discoveries
+  fdr <- fp / (fp + tp)
+  precision <- tp / (tp + fp)
+  recall <- tp / (tp + fn) # True positive rate or sensitivity
+  specificity <- tn / (tn + fp)
+  f1_measure <- 2 * ((precision * recall) / (precision + recall))
+  fb_measure <- (1 + b^2) * ((precision * recall) / ((b^2*precision) + recall))
+
+  obj <- list(fpr = fpr, fnr = fnr, fdr = fdr, tpr = recall,
+              sensitivity = recall, precision = precision, recall = recall,
+              specificity = specificity, f1_measure = f1_measure,
+              fb_measure = fb_measure)
+  return(obj)
+}
+
+
+# Create confusion matrix for Fisher's test
+confusion_matrix_fisher <- function(dt, diff_fisher_obj, N_cells, N_feat, b = 1) {
+  fp = fn = tp = tn <- matrix(0, ncol = 1, nrow = length(N_cells))
+  colnames(fp) = colnames(fn) = colnames(tn) = colnames(tp) <- c("mu")
+  rownames(fp) = rownames(fn) = rownames(tn) = rownames(tp) <- paste0("Cells", N_cells)
+  for (i in 1:length(N_cells)) {
+    if (is.numeric(dt[[i]]$sim_dt$diff_mean_features) ) {
+      diff_mean_feat <- 0
+    } else {
+      diff_mean_feat <- as.character(dt[[i]]$sim_dt$diff_mean_features$feature_name)
+    }
+    # Extract all feature names
+    all_feat <- diff_fisher_obj[[i]]$Feature
+    hits <- diff_fisher_obj[[i]]$Feature[which(diff_fisher_obj[[i]]$sig == TRUE)]
+    tp[i, ] <- c( sum(diff_mean_feat %in% hits))
+    fp[i, ] <- c( sum(setdiff(all_feat, diff_mean_feat) %in% hits))
+    tn[i, ] <- c( sum(setdiff(all_feat, diff_mean_feat) %in% setdiff(all_feat, hits)))
+    fn[i, ] <- c( sum(diff_mean_feat %in% setdiff(all_feat, hits)))
+  }
+
+  fpr <- fp / (fp + tn) 
+  fnr <- fn / (fn + tp)
+  fdr <- fp / (fp + tp)
+  precision <- tp / (tp + fp)
+  recall <- tp / (tp + fn)
+  specificity <- tn / (tn + fp)
+  f1_measure <- 2 * ((precision * recall) / (precision + recall))
+  fb_measure <- (1 + b^2) * ((precision * recall) / ((b^2*precision) + recall) )
+
+  obj <- list(fpr = fpr, fnr = fnr, fdr = fdr, tpr = recall, 
+              sensitivity = recall, precision = precision,
+              recall = recall, specificity = specificity, 
+              f1_measure = f1_measure, fb_measure = fb_measure)
+  return(obj)
+}
+
+## Create differential performance analysis object
+create_diff_performance_object <- function(conf_matr, variable = "mu", 
+                                           metric = "f1_measure", opts) {
+  df_res <- data.table(x = numeric(), y = numeric(), Features = numeric(), 
+                       cpgs = numeric(), or_mu = numeric())
+  for (f in 1:length(opts$N_feat)) {
+    for (cpg in 1:length(opts$N_cpgs)) {
+      for (or in 1:length(opts$OR_change_mu)) {
+        for (r in opts$rep) {
+          tmp <- as.vector(conf_matr[[f]][[cpg]][[or]][[r]][[metric]][, variable])
+          df_res <- rbind(df_res, data.table(x = opts$N_cells, y = tmp, 
+                                             Features = opts$N_feat[f], 
+                                             cpgs = opts$N_cpgs[cpg], 
+                                             or_mu = opts$OR_change_mu[or]))
+        }
+      }
+    }
+  }
+  return(df_res)
+}
+```
+
+
+# Load data
+First we load the simulated results to compute a sumamry of differential hits and also performance metrics. We perform this analysis across difference settings, such as CpG poor and CpG rich regions
+```{r}
+# Load libraries
+library(scMET)
+library(data.table)
+library(ggpubr)
+set.seed(1234)
+data_dir <- "~/datasets/scMET_ms/synthetic/diff_mean/data/"
+out_dir <- "~/datasets/scMET_ms/synthetic/diff_mean/power_analysis/"
+if (!dir.exists(out_dir)) {dir.create(out_dir, recursive = TRUE)}
+
+# Options
+opts <- list()
+opts$rep <- seq(1, 10)
+opts$N_feat <- 300
+opts$N_cells <- c(20, 50, 100, 200, 500)
+opts$N_cpgs <- c(15, 50)
+opts$OR_change_mu <- c(2, 3, 5)
+opts$efdr_m <- 0.1
+opts$eff_size_thresh <- log(1.5)
+```
+
+## Load stored object
+This will process the simulation summary results for differential mean analysis. 
+```{r, message=FALSE, warning=FALSE}
+dt = diff_fisher = diff_analysis = conf_matr = conf_matr_fisher <- list()
+conditions <- c("A", "B")
+summary_stats <- data.table(cells = numeric(), features = numeric(), cpgs = numeric(), 
+                            rep = numeric(), or_mu = numeric(), condition = character(), 
+                            feature = character(), epsilon_true = numeric(), 
+                            epsilon_median = numeric(), epsilon_sd = numeric(), 
+                            gamma_true = numeric(), gamma_median = numeric(), 
+                            gamma_sd = numeric(), mu_true = numeric(), 
+                            mu_median = numeric(), mu_sd = numeric(), cpg_cov = numeric())
+for (f in 1:length(opts$N_feat)) {
+  diff_fisher[[f]] <- list()
+  diff_analysis[[f]] <- list()
+  conf_matr[[f]] <- list()
+  conf_matr_fisher[[f]] <- list()
+  for (cpg in 1:length(opts$N_cpgs)) {
+    diff_fisher[[f]][[cpg]] <- list()
+    diff_analysis[[f]][[cpg]] <- list()
+    conf_matr[[f]][[cpg]] <- list()
+    conf_matr_fisher[[f]][[cpg]] <- list()
+    for (or in 1:length(opts$OR_change_mu)) {
+      diff_fisher[[f]][[cpg]][[or]] <- list()
+      diff_analysis[[f]][[cpg]][[or]] <- list()
+      conf_matr[[f]][[cpg]][[or]] <- list()
+      conf_matr_fisher[[f]][[cpg]][[or]] <- list()
+      for (r in opts$rep) {
+        dt <- list()
+        diff_fisher[[f]][[cpg]][[or]][[r]] <- list()
+        diff_analysis[[f]][[cpg]][[or]][[r]] <- list()
+        conf_matr[[f]][[cpg]][[or]][[r]] <- list()
+        conf_matr_fisher[[f]][[cpg]][[or]][[r]] <- list()
+        for (i in 1:length(opts$N_cells)) {
+          dt[[i]] <- readRDS(file = paste0(data_dir, "rep", r, 
+                                           "/scmet_ORmu", opts$OR_change_mu[or],
+                                           "_feat", opts$N_feat[f], 
+                                           "_cells", opts$N_cells[i], 
+                                           "_cpgs", opts$N_cpgs[cpg], "_mcmcFALSE.rds"))
+          diff_analysis[[f]][[cpg]][[or]][[r]][[i]] <- 
+            scmet_differential(obj_A = dt[[i]]$scmet_A, obj_B = dt[[i]]$scmet_B,
+                               psi_m = opts$eff_size_thresh, psi_e = log(1.5), psi_g = log(1.5),
+                               evidence_thresh_m = 0.8, evidence_thresh_e = 0.8, 
+                               evidence_thresh_g = 0.8, efdr_m = opts$efdr_m, efdr_e = 0.05, 
+                               efdr_g = 0.05, group_label_A = "A", group_label_B = "B",
+                               features_selected = NULL, filter_outlier_features = FALSE)
+          
+          # Fisher differential analysis
+          Y_A <- copy(dt[[i]]$sim_dt$scmet_dt_A$Y) %>% .[, group := factor("A")]
+          Y_B <- copy(dt[[i]]$sim_dt$scmet_dt_B$Y) %>% .[, group := factor("B")]
+          diff_fisher[[f]][[cpg]][[or]][[r]][[i]] <- 
+            rbind(Y_A, Y_B) %>% dcast(Feature~group, value.var = c("met_reads","total_reads"), 
+                                      fun.aggregate = sum) %>%
+            .[,c("unmet_reads_A","unmet_reads_B") := 
+                list(total_reads_A - met_reads_A, total_reads_B - met_reads_B)] %>% 
+            .[,c("total_reads_A", "total_reads_B") := NULL] %>%
+            .[,p.value := fisher.test(x = matrix( c(met_reads_A, unmet_reads_A, 
+                                                    met_reads_B, unmet_reads_B), 
+                                                  nrow = 2, ncol = 2))[["p.value"]], 
+              by = c("Feature")] %>%
+            .[,c("mu_A", "mu_B") := list((met_reads_A/(met_reads_A+unmet_reads_A)), 
+                                         (met_reads_B/(met_reads_B+unmet_reads_B)))] %>%
+            .[, lor_m := logitnorm::logit(mu_A) - logitnorm::logit(mu_B)]
+          
+          # Multiple testing correction and define significant hits
+          diff_fisher[[f]][[cpg]][[or]][[r]][[i]] %>%
+            .[, c("padj_fdr") := list(p.adjust(p.value, method = "fdr"))] %>%
+            .[,c("log_padj_fdr") := list(-log10(padj_fdr))] %>%
+            .[,sig := (padj_fdr <= opts$efdr_m & abs(lor_m) > opts$eff_size_thresh)]
+          
+          # Iterate over each condition
+          for (g in conditions) {
+            fit_obj <- dt[[i]][[paste0("scmet_",g)]]
+            sim_dt <- dt[[i]]$sim_dt[[paste0("scmet_dt_",g)]]
+            
+            # Compute summary stats
+            summary_stats <- rbind(summary_stats,
+                data.table(cells = opts$N_cells[i],
+                           features = opts$N_feat[f],
+                           cpgs = opts$N_cpgs[cpg],
+                           rep = r,
+                           or_mu = opts$OR_change_mu[or],
+                           condition = g,
+                           feature = fit_obj$feature_names,
+                           # epsilon
+                           epsilon_true = NA,
+                           epsilon_median = matrixStats::colMedians(fit_obj$posterior$epsilon),
+                           epsilon_sd = apply(fit_obj$posterior$epsilon, 2, sd),
+                           # gamma
+                           gamma_true = sim_dt$theta_true$gamma,
+                           gamma_median = matrixStats::colMedians(fit_obj$posterior$gamma),
+                           gamma_sd = apply(fit_obj$posterior$gamma, 2, sd),
+                           # mu
+                           mu_true = sim_dt$theta_true$mu,
+                           mu_median = matrixStats::colMedians(fit_obj$posterior$mu),
+                           mu_sd = apply(fit_obj$posterior$mu, 2, sd),
+                           # CpG coverage per feature
+                           cpg_cov = sim_dt$Y[, median(total_reads), by = "Feature"]$V1) )
+          }
+        }
+        # Here we set b = 2, meaning that Recall is twice as important as Precision.
+        conf_matr[[f]][[cpg]][[or]][[r]] <- compute_confusion_matrix(dt = dt, 
+              diff_an = diff_analysis[[f]][[cpg]][[or]][[r]], N_cells = opts$N_cells, 
+              N_feat = opts$N_feat[f], b = 2)
+        
+        conf_matr_fisher[[f]][[cpg]][[or]][[r]] <- confusion_matrix_fisher(dt = dt, 
+              diff_fisher_obj = diff_fisher[[f]][[cpg]][[or]][[r]], N_cells = opts$N_cells, 
+              N_feat = opts$N_feat[f], b = 2)
+      }
+    }
+  }
+}
+rm(dt, fit_obj, sim_dt, f, g, i, or, r, conditions, cpg, Y_A, Y_B)
+```
+
+
+# Differential mean methylation metrics
+```{r, fig.width=4, fig.height=2.5}
+metrics <- c("f1_measure", "precision", "recall", "fpr", "fnr", "fdr")
+metric_lab <- c("F1-measure", "Precision", "Recall", "FPR", "FNR", "FDR")
+tot_cells <- c(20, 50, 100, 200, 500)
+gg <- list()
+for (m in 1:length(metrics)) {
+  df_res <- create_diff_performance_object(conf_matr = conf_matr, variable = "mu", 
+                                           metric = metrics[m], opts = opts) %>%
+    .[, Model := "scMET"]
+  df_res_fisher <- create_diff_performance_object(conf_matr = conf_matr_fisher, 
+                                                  variable = "mu", metric = metrics[m], 
+                                                  opts = opts) %>%
+    .[, Model := "Fisher's exact test"]
+  # Combine results
+  df_res <- rbind(df_res, df_res_fisher)
+  df_res$or_mu <- factor(df_res$or_mu, levels = c(2, 3, 5), 
+                         labels = c("LOR(A, B) = 2", "LOR(A, B) = 3", "LOR(A, B) = 5"))
+  df_res$cpgs <- factor(df_res$cpgs, levels = c(15, 50), 
+                        labels = c("CpG poor", "CpG rich"))
+  
+  dt <- df_res[x %in% tot_cells]
+  gg[[m]] <- ggboxplot(dt, x = "x", y = "y", fill = "Model", lwd = 0.2, outlier.size = 0.4) +
+    facet_grid(cpgs ~ or_mu, scales = "free_y") +
+    scale_fill_manual(values = c("#999999", "#E69F00", "#56B4E9")) +
+    labs(title = NULL, x = "Number of cells", y = metric_lab[m], fill = "Model") +
+    theme_classic() +
+    theme(
+        legend.position = "top",
+        legend.title = element_blank(),
+        legend.margin = margin(-2, 0, -2, 0),
+        legend.box.margin = margin(-2, 0, -2, 0),
+        panel.spacing.x = unit(1, "lines"),
+        panel.spacing.y = unit(1, "lines"),
+        plot.tag = element_text(color = "black", face = "bold", size = rel(1.4)),
+        legend.text = element_text(color = "black", size = rel(1.1)),
+        strip.text = element_text(color = "black", size = rel(1.1)),
+        axis.text = element_text(color = "black", size = rel(0.9)),
+        axis.title = element_text(color = "black", size = rel(1.1))
+      )
+  print(gg[[m]])
+  pdf(file = paste0(out_dir, "power_diffmean_", metrics[m], ".pdf"), width = 9, height = 5.7)
+  print(gg[[m]])
+  dev.off()
+}
+```
+
+# Joint plot
+```{r, fig.width=4, fig.height=5}
+library(patchwork)
+gg_joint <- (gg[[4]] / gg[[5]]) + plot_annotation(tag_levels = 'a')
+print(gg_joint)
+
+pdf(file = paste0(out_dir, "power_diffmean_joint_fprfnr.pdf"), width = 9, height = 11)
+gg_joint
+dev.off()
+```
+

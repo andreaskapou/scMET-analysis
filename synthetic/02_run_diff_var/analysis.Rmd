@@ -1,0 +1,250 @@
+---
+title: "Power analysis for differential variability"
+author: "C.A. Kapourani"
+output: 
+  html_notebook: 
+    highlight: haddock
+    theme: cerulean
+    number_sections: true
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, results = "hide")
+
+# Create confusion matrix. Used only for assessing simulated data where ground
+# truth information is present.
+# TODO: Rewrite this function!
+compute_confusion_matrix <- function(dt, diff_an, N_cells, N_feat, b = 1) {
+  fp = fn = tp = tn <- matrix(0, ncol = 3, nrow = length(N_cells))
+  colnames(fp) = colnames(fn) = colnames(tn) = colnames(tp) <- c("mu", "gamma", "epsilon")
+  rownames(fp) = rownames(fn) = rownames(tn) = rownames(tp) <- paste0("Cells", N_cells)
+  for (i in 1:length(N_cells)) {
+    if (is.numeric(dt[[i]]$sim_dt$diff_var_features)) {
+      diff_var_feat <- 0
+    } else {
+      diff_var_feat <- as.character(dt[[i]]$sim_dt$diff_var_features$feature_name)
+    }
+    if (is.numeric(dt[[i]]$sim_dt$diff_mean_features) ) {
+      diff_mean_feat <- 0
+    } else {
+      diff_mean_feat <- as.character(dt[[i]]$sim_dt$diff_mean_features$feature_name)
+    }
+    # Extract all feature names
+    all_feat <- dt[[i]]$scmet_A$feature_names
+
+    hits <- list(diff_an[[i]]$diff_mu_summary$feature_name[
+                 which(diff_an[[i]]$diff_mu_summary$mu_diff_test %in%
+                         c( paste0(diff_an[[i]]$opts$group_label_B, "+"),
+                            paste0(diff_an[[i]]$opts$group_label_A, "+") ))],
+              diff_an[[i]]$diff_gamma_summary$feature_name[
+                which(diff_an[[i]]$diff_gamma_summary$gamma_diff_test %in%
+                      c( paste0(diff_an[[i]]$opts$group_label_B, "+"),
+                         paste0(diff_an[[i]]$opts$group_label_A, "+") ) )],
+              diff_an[[i]]$diff_epsilon_summary$feature_name[
+              which(diff_an[[i]]$diff_epsilon_summary$epsilon_diff_test %in%
+                      c( paste0(diff_an[[i]]$opts$group_label_B, "+"),
+                         paste0(diff_an[[i]]$opts$group_label_A, "+") ) )])
+    tp[i, ] <- c( sum(diff_mean_feat %in% hits[[1]]),
+                  sum(diff_var_feat %in% hits[[2]]),
+                  sum(diff_var_feat %in% hits[[3]]) )
+    
+    fp[i, ] <- c( sum(setdiff(all_feat, diff_mean_feat) %in% hits[[1]]),
+                  sum(setdiff(all_feat, diff_var_feat) %in% hits[[2]]),
+                  sum(setdiff(all_feat, diff_var_feat) %in% hits[[3]]) )
+
+    tn[i, ] <- c( sum(setdiff(all_feat, diff_mean_feat) %in% setdiff(all_feat, hits[[1]])),
+                  sum(setdiff(all_feat, diff_var_feat) %in% setdiff(all_feat, hits[[2]])),
+                  sum(setdiff(all_feat, diff_var_feat) %in% setdiff(all_feat, hits[[3]])) )
+
+    fn[i, ] <- c( sum(diff_mean_feat %in% setdiff(all_feat, hits[[1]])),
+                  sum(diff_var_feat %in% setdiff(all_feat, hits[[2]])),
+                  sum(diff_var_feat %in% setdiff(all_feat, hits[[3]])) )
+  }
+
+  # FPR: # of incorrect predicted positives divided by
+  #       total number of negatives (1 - specificity)
+  fpr <- fp / (fp + tn)
+  # FNR: # of incorrect predicted negatives divided by
+  #       total number of positives (1 - recall)
+  fnr <- fn / (fn + tp)
+  # FDR: # of incorrect predicted positives divided by
+  #       total number of discoveries
+  fdr <- fp / (fp + tp)
+  precision <- tp / (tp + fp)
+  recall <- tp / (tp + fn) # True positive rate or sensitivity
+  specificity <- tn / (tn + fp)
+  f1_measure <- 2 * ((precision * recall) / (precision + recall))
+  fb_measure <- (1 + b^2) * ((precision * recall) / ((b^2*precision) + recall))
+
+  obj <- list(fpr = fpr, fnr = fnr, fdr = fdr, tpr = recall,
+              sensitivity = recall, precision = precision, recall = recall,
+              specificity = specificity, f1_measure = f1_measure,
+              fb_measure = fb_measure)
+  return(obj)
+}
+
+## Create differential performance analysis object
+create_diff_performance_object <- function(conf_matr, variable = "gamma", 
+                                           metric = "f1_measure", opts) {
+  df_res <- data.frame(x = numeric(), y = numeric(), Features = numeric(), 
+                       cpgs = numeric(), or_gamma = numeric())
+  for (f in 1:length(opts$N_feat)) {
+    for (cpg in 1:length(opts$N_cpgs)) {
+      for (or in 1:length(opts$OR_change_gamma)) {
+        for (r in opts$rep) {
+          tmp <- as.vector(conf_matr[[f]][[cpg]][[or]][[r]][[metric]][, variable])
+          df_res <- rbind(df_res, data.frame(x = opts$N_cells, y = tmp, 
+                                             Features = opts$N_feat[f], 
+                                             cpgs = opts$N_cpgs[cpg], 
+                                             or_gamma = opts$OR_change_gamma[or]))
+        }
+      }
+    }
+  }
+  return(df_res)
+}
+
+# Power analysis plot
+power_analysis_plot <- function(dt, fill_by = "cpgs", fill_label = "Region", 
+                                facet_by = "or_gamma", x_lab = "Number of cells", 
+                                y_lab = "F1-measure", legend_pos = c(0.95, 0.2)){
+  p <- ggboxplot(dt, x = "x", y = "y", fill = fill_by, lwd = 0.3, outlier.size = 0.4) +
+    facet_wrap(facet_by, scales = "fixed") +
+    scale_fill_manual(values = c("#999999", "#E69F00", "#56B4E9")) +
+    labs(title = NULL, x = x_lab, y = y_lab, fill = fill_label) +
+    theme_classic() +
+    theme(
+        legend.position = legend_pos,
+        panel.spacing.x = unit(0.9, "lines"),
+        legend.text = element_text(color = "black", size = rel(1.2)),
+        strip.text = element_text(color = "black", size = rel(1.25)),
+        axis.text = element_text(color = "black", size = rel(1)),
+        axis.title = element_text(color = "black", size = rel(1.25))
+      )
+} 
+```
+
+# Load data
+First we load the simulated results to compute a sumamry of differential hits and also performance metrics. We perform this analysis across difference settings, such as CpG poor and CpG rich regions.
+```{r}
+# Load libraries
+library(scMET)
+library(data.table)
+library(ggpubr)
+set.seed(1234)
+data_dir <- "~/datasets/scMET_ms/synthetic/diff_var/data/"
+out_dir <- "~/datasets/scMET_ms/synthetic/diff_var/power_analysis/"
+if (!dir.exists(out_dir)) {dir.create(out_dir, recursive = TRUE)}
+
+# Options
+opts <- list()
+opts$rep <- seq(1, 10)
+opts$N_feat <- 300
+opts$N_cells <- c(20, 50, 100, 200, 500, 1000)
+opts$N_cpgs <- c(15, 50)
+opts$OR_change_gamma <- c(2, 3, 5)
+```
+
+## Load stored object
+This will process the simulation summary results for differential variability analysis. 
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
+dt = diff_analysis = conf_matr <- list()
+conditions <- c("A", "B")
+summary_stats <- data.table(cells = numeric(), features = numeric(), cpgs = numeric(), 
+                            rep = numeric(), or_gamma = numeric(), 
+                            condition = character(), feature = character(), 
+                            epsilon_true = numeric(), epsilon_median = numeric(), 
+                            epsilon_sd = numeric(), gamma_true = numeric(), 
+                            gamma_median = numeric(), gamma_sd = numeric(), 
+                            mu_true = numeric(), mu_median = numeric(), 
+                            mu_sd = numeric(), cpg_cov = numeric())
+for (f in 1:length(opts$N_feat)) {
+  diff_analysis[[f]] <- list()
+  conf_matr[[f]] <- list()
+  for (cpg in 1:length(opts$N_cpgs)) {
+    diff_analysis[[f]][[cpg]] <- list()
+    conf_matr[[f]][[cpg]] <- list()
+    for (or in 1:length(opts$OR_change_gamma)) {
+      diff_analysis[[f]][[cpg]][[or]] <- list()
+      conf_matr[[f]][[cpg]][[or]] <- list()
+      for (r in opts$rep) {
+        dt <- list()
+        diff_analysis[[f]][[cpg]][[or]][[r]] <- list()
+        conf_matr[[f]][[cpg]][[or]][[r]] <- list()
+        for (i in 1:length(opts$N_cells)) {
+          dt[[i]] <- readRDS(file = paste0(data_dir, "rep", r, 
+                                           "/scmet_ORgamma", opts$OR_change_gamma[or],
+                                           "_feat", opts$N_feat[f], "_cells", 
+                                           opts$N_cells[i], "_cpgs", opts$N_cpgs[cpg], 
+                                           "_mcmcFALSE.rds"))
+          diff_analysis[[f]][[cpg]][[or]][[r]][[i]] <- 
+            scmet_differential(obj_A = dt[[i]]$scmet_A, obj_B = dt[[i]]$scmet_B,
+                               psi_m = log(1.5), psi_e = log(1.5), psi_g = log(1.5),
+                               evidence_thresh_m = 0.8, evidence_thresh_e = 0.8, 
+                               evidence_thresh_g = 0.8, efdr_m = 0.05, efdr_e = 0.05, 
+                               efdr_g = 0.05, group_label_A = "A", group_label_B = "B",
+                               features_selected = NULL, filter_outlier_features = FALSE)
+          # Iterate over each condition
+          for (g in conditions) {
+            fit_obj <- dt[[i]][[paste0("scmet_",g)]]
+            sim_dt <- dt[[i]]$sim_dt[[paste0("scmet_dt_",g)]]
+            
+            # Compute summary stats
+            summary_stats <- rbind(summary_stats,
+                data.table(cells = opts$N_cells[i],
+                           features = opts$N_feat[f],
+                           cpgs = opts$N_cpgs[cpg],
+                           rep = r,
+                           or_gamma = opts$OR_change_gamma[or],
+                           condition = g,
+                           feature = fit_obj$feature_names,
+                           # epsilon
+                           epsilon_true = NA,
+                           epsilon_median = matrixStats::colMedians(fit_obj$posterior$epsilon),
+                           epsilon_sd = apply(fit_obj$posterior$epsilon, 2, sd),
+                           # gamma
+                           gamma_true = sim_dt$theta_true$gamma,
+                           gamma_median = matrixStats::colMedians(fit_obj$posterior$gamma),
+                           gamma_sd = apply(fit_obj$posterior$gamma, 2, sd),
+                           # mu
+                           mu_true = sim_dt$theta_true$mu,
+                           mu_median = matrixStats::colMedians(fit_obj$posterior$mu),
+                           mu_sd = apply(fit_obj$posterior$mu, 2, sd),
+                           # CpG coverage per feature
+                           cpg_cov = sim_dt$Y[, median(total_reads), by = "Feature"]$V1) )
+          }
+        }
+        # Here we set b = 2, meaning that Recall is twice as important as Precision.
+        conf_matr[[f]][[cpg]][[or]][[r]] <- compute_confusion_matrix(dt = dt, 
+            diff_an = diff_analysis[[f]][[cpg]][[or]][[r]], N_cells = opts$N_cells, 
+            N_feat = opts$N_feat[f], b = 2)
+      }
+    }
+  }
+}
+rm(dt, fit_obj, sim_dt, f, g, i, m, or, r)
+```
+
+
+# Differential mean methylation metrics
+```{r, fig.width=6, fig.height=2}
+metrics <- c("f1_measure", "precision", "recall", "fpr", "fnr", "fdr")
+metric_lab <- c("F1-measure", "Precision", "Recall", "FPR", "FNR", "FDR")
+legend_pos <- list(c(0.93, 0.2), c(0.93, 0.2), c(0.93, 0.2), c(0.93, 0.8), 
+                   c(0.93, 0.8), c(0.93, 0.8))
+for (m in 1:length(metrics)) {
+  df_res <- create_diff_performance_object(conf_matr = conf_matr, variable = "epsilon",
+                                           metric = metrics[m], opts = opts)
+  df_res$or_gamma <- factor(df_res$or_gamma, levels = c(2, 3, 5), 
+                            labels = c("LOR(A, B) = 2", "LOR(A, B) = 3", "LOR(A, B) = 5"))
+  df_res$cpgs <- factor(df_res$cpgs, levels = c(15, 50), labels = c("CpG poor", "CpG rich"))
+  p <- power_analysis_plot(dt = df_res, fill_by = "cpgs", fill_label = "Region", 
+                           facet_by = "or_gamma", x_lab = "Number of cells", y_lab = metric_lab[m],
+                           legend_pos = legend_pos[[m]])
+  print(p)
+  pdf(file = paste0(out_dir, "power_diffvar_", metrics[m],".pdf"), width = 10.5, height = 3.9)
+  print(p)
+  dev.off()
+}
+```

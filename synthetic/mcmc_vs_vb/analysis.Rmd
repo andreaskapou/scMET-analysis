@@ -1,0 +1,229 @@
+---
+title: "MCMC vs VB estimates (one simuilation)"
+author: "C.A. Kapourani & R. Argelaguet"
+output: 
+  html_notebook: 
+    highlight: haddock
+    theme: cerulean
+    number_sections: true
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, results = "hide")
+```
+
+# Initialise params
+```{r message=FALSE}
+library(scMET)
+library(data.table)
+library(matrixStats)
+library(coda)
+library(ggpubr)
+library(purrr)
+set.seed(1234)
+
+data_dir <- "~/datasets/scMET_ms/synthetic/diff_var/data/rep1/"
+out_dir <- "~/datasets/scMET_ms/synthetic/mcmc_vs_vb/"
+if (!dir.exists(out_dir)) {dir.create(out_dir, recursive = TRUE)}
+# Options
+N_feat <- 300
+N_cpgs <- 50
+N_cells <- c(50, 100, 200)
+models <- c("MCMC","VB")
+groups <- c("A")
+```
+
+
+## Load pre-computed models
+```{r}
+models_list <- list()
+models_list[["MCMC"]] <- list()
+models_list[["VB"]] <- list()
+
+for (i in N_cells) {
+  file <- paste0(data_dir, "scmet_ORgamma3_feat", N_feat, "_cells", i, 
+                 "_cpgs", N_cpgs,"_mcmcTRUE.rds")
+  models_list[["MCMC"]][[i]] <- readRDS(file)
+  
+  file <- paste0(data_dir, "scmet_ORgamma3_feat", N_feat, "_cells", i, 
+                 "_cpgs", N_cpgs,"_mcmcFALSE.rds")
+  models_list[["VB"]][[i]] <- readRDS(file)
+}
+```
+
+
+# Plotting posterior estimates
+```{r, fig.width=4, fig.height=1.7}
+limits <- list("mu" = c(0,1), "gamma" = c(0.06,0.47))
+# Iterate vver parameters
+for (param in c("mu", "gamma")) {
+  # over cells
+  for (i in N_cells) {
+    gg <- list()
+    # Over models (MCMC or VB)
+    for (j in models) {
+      # Add seed here so we subsample the same number of features for plotting
+      set.seed(1234)
+      gg[[j]] <- scmet_plot_estimated_vs_true(obj = models_list[[j]][[i]]$scmet_A, 
+                             sim_dt = models_list[[j]][[i]]$sim_dt$scmet_dt_A, 
+                             param = param, hpd_thresh = 0.8, nfeatures = 100) + 
+        coord_cartesian(xlim = limits[[param]], ylim = limits[[param]])
+      if (param == "mu") {
+        gg[[j]] <- gg[[j]] + ylab(paste0(j, " estimated mean methylation"))
+      } else {
+        gg[[j]] <- gg[[j]] + ylab(paste0(j, " estimated overdispersion"))
+      }
+    }
+    p <- cowplot::plot_grid(plotlist = gg, ncol = 2)
+    plot(p)
+    
+    file <- sprintf("%s/mcmcvb_errorbars_%s_Ncells%s.pdf", out_dir, param, i)
+    pdf(file, width = 9, height = 3.7, useDingbats = FALSE)
+    print(p)
+    dev.off()
+  }
+}
+rm(gg, p, param, limits, i, j)
+```
+
+
+
+# Extracting posterior summary information
+```{r fetch_point_estimates, message=FALSE}
+hpd_thresh <- 0.8
+df <- N_cells %>% map(function(i) {
+        models %>% map(function(j) {
+          groups %>% map(function(k) {
+      
+        fit_obj <- models_list[[j]][[i]][[paste0("scmet_",k)]]
+        sim_dt <- models_list[[j]][[i]]$sim_dt[[paste0("scmet_dt_",k)]]
+        dt <- data.table(
+          ncells = i,
+          model = j,
+          group = k,
+          feature = fit_obj$feature_names,
+          # mu
+          mu_true = sim_dt$theta_true$mu,
+          mu_median = colMedians(fit_obj$posterior$mu),
+          mu_sd = apply(fit_obj$posterior$mu,2,sd),
+          mu_hpdlow = HPDinterval(mcmc(fit_obj$posterior$mu), 
+                                  prob = hpd_thresh)[, 1],
+          mu_hpdup = HPDinterval(mcmc(fit_obj$posterior$mu), 
+                                 prob = hpd_thresh)[, 2],
+          mu_hpd = abs(HPDinterval(mcmc(fit_obj$posterior$mu), 
+                                   prob = hpd_thresh)[, 2] - 
+                         HPDinterval(mcmc(fit_obj$posterior$mu), 
+                                     prob = hpd_thresh)[, 1]),
+          # gamma
+          gamma_true = sim_dt$theta_true$gamma,
+          gamma_median = colMedians(fit_obj$posterior$gamma),
+          gamma_sd = apply(fit_obj$posterior$gamma,2,sd),
+          gamma_hpdlow = HPDinterval(mcmc(fit_obj$posterior$gamma), 
+                                     prob = hpd_thresh)[, 1],
+          gamma_hpdup = HPDinterval(mcmc(fit_obj$posterior$gamma), 
+                                    prob = hpd_thresh)[, 2],
+          gamma_hpd = abs(HPDinterval(mcmc(fit_obj$posterior$gamma), 
+                                      prob = hpd_thresh)[, 2] - 
+                            HPDinterval(mcmc(fit_obj$posterior$gamma), 
+                                        prob = hpd_thresh)[, 1])
+        )
+    }) %>% rbindlist
+  }) %>% rbindlist
+}) %>% rbindlist %>%
+  melt(id.vars = c("ncells","model","group","feature"), variable.factor = FALSE) %>%
+  .[, estimate := strsplit(variable,"_") %>% map_chr(2)] %>%
+  .[, variable := strsplit(variable,"_") %>% map_chr(1)]
+```
+
+
+# Plot MCMC vs VB posterior median estimates
+```{r fig.align="center", fig.height=3, fig.width=4.5}
+vars <- c("mu", "gamma")
+titles <- c(expression(paste("Mean methylation ", mu)),
+            expression(paste("Overdispersion ", gamma)))
+p_list <- list()
+for (i in 1:length(vars)) {
+  to.plot <- df[variable == vars[i] & estimate != "true" & 
+                  ncells %in% N_cells] %>%
+    dcast(ncells+group+estimate+feature~model, value.var = "value") %>%
+    .[,tmp := sprintf("%s cells", ncells)]
+  to.plot$tmp <- factor(to.plot$tmp, 
+                        levels = c("50 cells", "100 cells", "200 cells"))
+
+  p <- ggplot(to.plot[estimate == "median"], aes(x = MCMC, y = VB)) +
+    geom_point(size = 1.4, shape = 21, stroke = 0.2, fill = "#E69F00") +
+    labs(x = "MCMC posterior median estimates", 
+         y = "VB posterior median estimates") + ggtitle(titles[i]) +
+    facet_wrap(~tmp, scales = "free") +
+    geom_abline(slope = 1, intercept = 0, linetype = "solid", size = 0.3) +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      legend.title = element_blank(),
+      plot.tag = element_text(color = "black", face = "bold", size = rel(2)),
+      legend.text = element_text(color = "black", size = rel(1.1)),
+      strip.text = element_text(color = "black", size = rel(1.1)),
+      plot.title = element_text(hjust = 0.5, face = "bold", size = rel(1.4)),
+      axis.text = element_text(color = "black", size = rel(0.8)),
+      axis.title = element_text(color = "black", size = rel(1.1))
+    )
+  p_list[[i]] <- p
+}
+p_median <- cowplot::plot_grid(plotlist = p_list, nrow = 2)
+print(p_median)
+pdf(sprintf("%s/mcmcvb_median.pdf", out_dir), width = 10.5, height = 6.5)
+print(p_median)
+dev.off()
+```
+
+
+# Plot MCMC vs VB 80% highest posterior density
+```{r fig.align="center", fig.height=3, fig.width=4.5}
+vars <- c("mu", "gamma")
+titles <- c(expression(paste("Mean methylation ", mu)),
+            expression(paste("Overdispersion ", gamma)))
+p_list <- list()
+for (i in 1:length(vars)) {
+  to.plot <- df[variable == vars[i] & estimate != "true" & ncells %in% N_cells] %>%
+    dcast(ncells+group+estimate+feature~model, value.var = "value") %>%
+    .[,tmp := sprintf("%s cells", ncells)]
+  to.plot$tmp <- factor(to.plot$tmp, levels = c("50 cells", "100 cells", "200 cells"))
+
+  p <- ggplot(to.plot[estimate == "hpd"], aes(x = MCMC, y = VB)) +
+    geom_point(size = 1.4, shape = 21, stroke = 0.2, fill = "#E69F00") +
+    labs(x = "MCMC 80% HPD width", y = "VB 80% HPD width") + ggtitle(titles[i]) +
+    facet_wrap(~tmp, scales = "free") +
+    geom_abline(slope = 1, intercept = 0, linetype = "solid", size = 0.3) +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      legend.title = element_blank(),
+      plot.tag = element_text(color = "black", face = "bold", size = rel(2)),
+      legend.text = element_text(color = "black", size = rel(1.1)),
+      strip.text = element_text(color = "black", size = rel(1.1)),
+      plot.title = element_text(hjust = 0.5, face = "bold", size = rel(1.4)),
+      axis.text = element_text(color = "black", size = rel(0.8)),
+      axis.title = element_text(color = "black", size = rel(1))
+    )
+  p_list[[i]] <- p
+}
+p_hpd <- cowplot::plot_grid(plotlist = p_list, nrow = 2)
+print(p_hpd)
+pdf(sprintf("%s/mcmcvb_hpd.pdf", out_dir), width = 10.5, height = 6.5)
+print(p_hpd)
+dev.off()
+```
+
+
+# Final plots
+```{r, fig.width=4, fig.height=5.5}
+library(patchwork)
+tmp <- (p_median/p_hpd) + plot_annotation(tag_levels = 'a')
+print(tmp)
+
+pdf(file = paste0(out_dir, "mcmcvb.pdf"), width = 10.5, height = 12)
+print(tmp)
+dev.off()
+```
+

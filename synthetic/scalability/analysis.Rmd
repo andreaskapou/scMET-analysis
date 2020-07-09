@@ -1,0 +1,168 @@
+---
+title: "Scalability of scMET model - VB vs MCMC"
+author: "C.A. Kapourani & R. Argelaguet"
+output: 
+  html_notebook: 
+    highlight: haddock
+    theme: cerulean
+    number_sections: true
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, results = "hide")
+```
+
+# Initialise params
+```{r}
+library(data.table)
+library(ggpubr)
+set.seed(1234)
+data_dir <- "~/datasets/scMET_ms/synthetic/scalability/data/"
+out_dir <- "~/datasets/scMET_ms/synthetic/scalability/analysis/"
+if (!dir.exists(out_dir)) {dir.create(out_dir, recursive = TRUE)}
+rep <- seq(1, 5)
+N_cpgs <- 15
+```
+
+# Increasing number of cells
+```{r}
+N_feat <- 500
+N_cells <- c(20, 50, 100, 200, 500, 1000, 2000, 5000)
+```
+
+## Load data
+```{r}
+model <- c("MCMC", "VB")
+summary_stats <- data.table(cells = numeric(), rep = numeric(), 
+                            Model = character(), time_h = numeric())
+dt <- list()
+for (m in model) {
+  for (r in rep) {
+    for (i in 1:length(N_cells)) {
+      if (m == "MCMC") {
+        use_mcmc <- TRUE
+        iter <- 3000
+      } else {
+        use_mcmc <- FALSE
+        iter <- 20000
+      }
+      dt <- readRDS(file = paste0(data_dir, "rep", r, "/scmet_feat", N_feat, 
+                                  "_cells", N_cells[i], "_cpgs", N_cpgs, 
+                                  "_mcmc", use_mcmc, "_iter", iter, ".rds"))
+      summary_stats <- rbind(summary_stats,
+            data.table(cells = N_cells[i],
+                       rep = r,
+                       Model = m,
+                       time_h = dt$microbenchmark_time_est[, 2] / 10^9 / 60 / 60) )
+    }
+  }
+}
+```
+
+
+```{r}
+geometric_sequence <- function(length, initial.value = 1, discount.factor = 0.5) {
+    stopifnot(is.numeric(length), length(length) == 1, length > 
+        0, length == as.integer(length))
+    stopifnot(is.numeric(initial.value), length(initial.value) == 
+        1, initial.value != 0)
+    stopifnot(is.numeric(discount.factor), length(discount.factor) == 
+        1, discount.factor != 0)
+    return(initial.value * discount.factor^(0:(length - 1)))
+}
+
+p_cells <- ggplot(summary_stats, aes(x = factor(cells), y = time_h, fill = Model)) +
+  geom_jitter(size = 3.2, width = 0.2, height = .001, shape = 21) +
+  scale_fill_manual(values = c("#999999", "#E69F00", "#56B4E9")) +
+  ylab("Time in hours") + xlab("Number of cells (500 features)") +
+  theme_classic() +
+  theme(
+      legend.position = c(0.12, 0.88),
+      legend.title = element_blank(),
+      plot.tag = element_text(color = "black", face = "bold", size = rel(1.4)),
+      axis.text = element_text(color = "black", size = rel(0.8)),
+      axis.title = element_text(color = "black", size = rel(1.1))
+    )
+print(p_cells)
+```
+
+```{r, echo=FALSE, results='hide'}
+pdf(file = paste0(out_dir, "scalability_cells.pdf"), width = 4.6, height = 3.4)
+p_cells
+dev.off()
+```
+
+# Increasing number of features
+```{r}
+N_feat <- c(20, 50, 100, 200, 500, 1000, 2000, 5000)
+N_cells <- c(200)
+```
+
+## Load data
+```{r}
+model <- c("MCMC", "VB")
+summary_stats_feat <- data.table(features = numeric(), rep = numeric(), 
+                                 Model = character(), time_h = numeric())
+dt <- list()
+for (m in model) {
+  for (r in rep) {
+    for (i in 1:length(N_feat)) {
+      if (m == "MCMC") {
+        use_mcmc <- TRUE
+        iter <- 3000
+      } else {
+        use_mcmc <- FALSE
+        iter <- 20000
+      }
+      dt <- readRDS(file = paste0(data_dir, "rep", r, "/scmet_feat", N_feat[i], 
+                                  "_cells", N_cells, "_cpgs", N_cpgs, 
+                                  "_mcmc", use_mcmc, "_iter", iter, ".rds"))
+      summary_stats_feat <- rbind(summary_stats_feat,
+            data.table(features = N_feat[i],
+                       rep = r,
+                       Model = m,
+                       time_h = dt$microbenchmark_time_est[, 2] / 10^9 / 60 / 60) )
+    }
+  }
+}
+```
+
+
+```{r}
+
+p_feat <- ggplot(summary_stats_feat, aes(x = factor(features), y = time_h, fill = Model)) +
+  geom_jitter(size = 3.2, width = 0.2, height = .001, shape = 21) +
+  scale_fill_manual(values = c("#999999", "#E69F00", "#56B4E9")) +
+  ylab("Time in hours") + xlab("Number of features (200 cells)") +
+  theme_classic() +
+  theme(
+      legend.position = c(0.12, 0.88),
+      legend.title = element_blank(),
+      plot.tag = element_text(color = "black", face = "bold", size = rel(1.4)),
+      axis.text = element_text(color = "black", size = rel(0.8)),
+      axis.title = element_text(color = "black", size = rel(1.1))
+    )
+print(p_feat)
+```
+
+```{r, echo=FALSE, results='hide'}
+pdf(file = paste0(out_dir, "scalability_features.pdf"), width = 4.6, height = 3.4)
+p_feat
+dev.off()
+```
+
+## Final plot
+```{r, fig.height=2.3, fig.width=5}
+library(patchwork)
+tmp <- (p_cells | p_feat + theme(legend.position = "none")) + 
+  plot_annotation(tag_levels = 'a', title = "Model scalability", 
+                  theme = theme(plot.title = element_text(colour = "black", hjust = 0.5, vjust = -0.5,  
+                                                          face = "bold", size = rel(1.5) ),
+                                ))
+print(tmp)
+pdf(file = paste0(out_dir, "scmet_scalability.pdf"), width = 9.2, height = 4.1)
+print(tmp)
+dev.off()
+```
+
