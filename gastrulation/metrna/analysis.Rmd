@@ -1,0 +1,237 @@
+---
+title: "scNMT-seq gastrulation analysis"
+author: "C.A.Kapourani"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+```{r set_global_options, cache=FALSE, results='hide', echo=FALSE, warning=FALSE, message=FALSE}
+library('knitr')
+knitr::opts_chunk$set(dpi = 75, warning = FALSE, message = FALSE)
+```
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(BASiCS))
+suppressPackageStartupMessages(library(SingleCellExperiment))
+suppressPackageStartupMessages(library(ggpubr))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(viridis))
+suppressPackageStartupMessages(library(ggplot2))
+
+#####################
+## Define settings ##
+#####################
+source("../load_settings.R")
+data_dir <- "/Users/ckapoura/datasets/scMET_ms/gastrulation/data/"
+hits_dir <- "/Users/ckapoura/datasets/scMET_ms/gastrulation/metrna/hits/"
+pdf_dir <- "/Users/ckapoura/datasets/scMET_ms/gastrulation/metrna/analysis/"
+if (!dir.exists(hits_dir)) {dir.create(hits_dir, recursive = TRUE)}
+if (!dir.exists(pdf_dir)) {dir.create(pdf_dir, recursive = TRUE)}
+
+# Define genomic context
+opts$anno <- c("prom_2000_2000")
+```
+
+# RNA variability
+## Load BASiCS object and get posterior summary stats
+```{r}
+# Load BASiCS object
+basics_obj <- readRDS(file = paste0(data_dir, "/rna_basics.rds"))
+# SingleCellExperiment object
+sce <- readRDS(io$rna)[, sample_metadata$id_rna]
+# Perform HVG analysis
+HVG <- BASiCS_DetectVG(basics_obj, PercentileThreshold = 0.9,
+                       EFDR = 0.01, Plot = FALSE)
+hvg_results <- HVG@Table[, c("GeneName", "Prob", "HVG")]
+colnames(hvg_results) <- c("ens_id", "rna_tail_prob", "rna_is_variable")
+
+# Obtain posterior draws summary
+chain_summary <- Summary(basics_obj)
+
+# Merge Ensemb IDs with gene symbol
+subset_meta <- rowData(sce[rownames(chain_summary@parameters$mu)]) %>%
+  as.data.table(keep.rownames = "ens_id") %>%
+  merge(., hvg_results, by = "ens_id")
+
+# Get posterior medians summary
+post_summary <- data.table(ens_id = rownames(chain_summary@parameters$mu),
+                           rna_mu = log(chain_summary@parameters$mu[, 1]),
+                           rna_epsilon = chain_summary@parameters$epsilon[, 1],
+                           rna_delta = log(chain_summary@parameters$delta[, 1]) )
+```
+
+## Plot RNA variability
+### Mean - overdispersion with trend line
+```{r}
+# Show mean-overdispersion relationship
+plot(BASiCS_ShowFit(basics_obj))
+```
+
+### Mean - overdispersion with HVG analysis
+```{r, fig.width=3.2, fig.height=2.5, message=FALSE, warning=FALSE}
+# Combine data 
+joint_rna_dt <- merge(subset_meta, post_summary, by = "ens_id") %>%
+  setorder(-rna_epsilon)
+
+to.plot <- joint_rna_dt[rna_mu > 0.1]
+tmp <- to.plot[to.plot$rna_is_variable == FALSE, ]
+tmp <- tmp[sample(NROW(tmp), 2000), ]
+to.plot <- rbind(to.plot[to.plot$rna_is_variable == TRUE, ], tmp)
+
+mode <- c("rna_delta", "rna_epsilon") 
+y_lab <- list(
+  "rna_delta" = "RNA log overdispersion",
+  "rna_epsilon" = "RNA log residual overdispersion"
+)
+for (m in mode) {
+  gg <- ggplot(to.plot, aes_string(x = "rna_mu", y = m)) +
+    geom_point(aes(fill = rna_is_variable, alpha = rna_is_variable, size = rna_is_variable),
+               shape = 21, stroke = 0.01) +
+    scale_fill_manual(values = c("gray80","red")) +
+    scale_alpha_manual(values = c(0.4, 0.6)) +
+    scale_size_manual(values = c(0.65, 1.6)) +
+    guides(fill = guide_legend(override.aes = list(size = 2.5))) +
+    xlab("Log mean expression") + ylab(y_lab[[m]]) +
+    ggrepel::geom_text_repel(data = head(to.plot[rna_is_variable == TRUE], n = 20),
+                             aes_string(x = "rna_mu", y = m, label = "symbol"),
+                             size = 3, color = "black") +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      strip.text = element_text(color = "black", size = rel(1.1)),
+      legend.text = element_text(color = "black", size = rel(1.15)),
+      axis.text = element_text(color = "black", size = rel(1)),
+      axis.title = element_text(color = "black", size = rel(1.2))
+    )
+  print(gg)
+  pdf(file = paste0(pdf_dir, "basics_meanvar_", m, ".pdf"), 
+      width = 7, height = 5, useDingbats = FALSE)
+  print(gg)
+  dev.off()
+}
+```
+
+### Store HVG results
+```{r}
+rna_hvg <- joint_rna_dt[, c("ens_id", "symbol", "rna_tail_prob", "rna_is_variable",
+                  "rna_mu", "rna_epsilon", "rna_delta")] %>%
+  setnames(c("symbol"), c("rna_symbol"))
+fwrite(rna_hvg, paste0(hits_dir,"/rna_hvg.txt.gz"), sep = "\t", quote = FALSE)
+```
+
+
+# DNAm variability
+```{r}
+# Perform HVF analysis
+obj <- readRDS(sprintf("%s/%s_vb.rds", data_dir, opts$anno))
+scmet_obj <- scmet_hvf(scmet_obj = obj, delta_e = 0.9, delta_g = NULL, efdr = 0.1)
+
+# Obtain gene names
+gene_metadata <- fread(io$gene.metadata) %>% .[,c("ens_id", "symbol")]
+#Highlight top hits for promoters
+met_joint <- scmet_obj$hvf$summary %>% as.data.table %>%
+  setnames("feature_name", "ens_id") %>%
+  merge(gene_metadata, by = "ens_id") %>%
+  setorder(-epsilon)
+```
+
+
+## Mean - overdispersion with HVF analysis
+```{r}
+mode <- c("epsilon", "gamma")
+for (m in mode) {
+  
+  gg <- scmet_plot_mean_var(obj = scmet_obj, y = m, task = "hvf",
+                            nfeatures = 3000) +
+    theme(legend.position = c(0.9, 0.1)) +
+  ggrepel::geom_text_repel(data = head(met_joint, n = 35),
+                           aes_string(x = "mu", y = m, label = "symbol"),
+                           size = 2.3, color = "black")
+  print(gg)
+  pdf(paste0(pdf_dir, "/scmet_meanvar_", m, ".pdf"),
+      width = 7, height = 5, useDingbats = FALSE)
+  print(gg)
+  dev.off()
+}
+```
+
+
+## Store HVF analysis results
+```{r}
+met_hvf <- scmet_obj$hvf$summary %>%
+  as.data.table %>% .[, anno := "prom_2000_2000"] %>%
+  setnames("feature_name", "ens_id")
+fwrite(met_hvf, paste0(hits_dir, "/met_hvf.txt.gz"), sep = "\t", quote = FALSE)
+```
+
+# Joint analysis
+```{r}
+## Combine omics
+metrna <- merge(met_hvf, rna_hvg, by = "ens_id") %>% 
+  merge(gene_metadata, by = "ens_id")
+
+# Process
+metrna[, color := "black"]
+metrna[epsilon > 0.5 & rna_epsilon > 1.5, color := "red"]
+metrna[epsilon < 0.15 & rna_epsilon > 2, color := "blue"]
+metrna <- metrna %>% setorder(-rna_epsilon)
+fwrite(metrna, file = paste0(hits_dir, "metrna_variability.csv"), 
+       sep = "\t", quote = FALSE)
+```
+
+
+## Plot RNA and DNA co-variability
+```{r, warning=FALSE, message=FALSE}
+set.seed(12)
+# Marker genes
+marker_genes <- c(
+  "Cubn", "Cer1", "Mixl1", "Lefty2", "Amn", "Cldn6", "Mesp1",
+  "Krt8", "Apob", "Foxi1", "Aplnr", "Id3", "Peg3",  "Dppa5a", "Dppa4",
+  "Dppa2", "Spp1", "Morc1", "Trap1a", "Pcdh19", "Zfp42", "Fmr1nb"
+)
+
+tmp <- metrna[metrna$color == "black", ]
+tmp <- tmp[sample(NROW(tmp), 4000), ]
+to.plot <- rbind(metrna[metrna$color != "black", ], tmp)
+gg <- ggplot(to.plot, aes(x = epsilon, y = rna_epsilon, 
+                        alpha = color, fill = color, size = color)) +
+  labs(x = expression(paste("Residual overdispersion (DNAm)")),
+       y = "Residual overdispersion (RNA)") +
+  geom_point(shape = 21, stroke = 0.1, color = "black") +
+  scale_fill_manual(values = c("black" = "gray80", "red" = "#4E934D", "blue" = "#C400AD")) +
+  scale_size_manual(values = c("black" = 0.6, "red" = 2, "blue" = 2)) +
+  scale_alpha_manual(values = c("black" = 0.5, "red" = 0.8, "blue" = 0.8)) +
+  ggrepel::geom_text_repel(data = to.plot[color == "red" & symbol %in% marker_genes],
+                           aes(x = epsilon, y = rna_epsilon, label = symbol),
+                           size = 5, color = "#4E934D") +
+  ggrepel::geom_text_repel(data = to.plot[color == "blue" & symbol %in% marker_genes],
+                           aes(x = epsilon,  y = rna_epsilon, label = symbol),
+                           size = 5, color = "#C400AD") +
+  coord_cartesian(xlim = c(-0.9, 1.6)) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(color = "black", size = rel(1.1)),
+    legend.text = element_text(color = "black", size = rel(1.15)),
+    axis.text = element_text(color = "black", size = rel(1.05)),
+    axis.title = element_text(color = "black", size = rel(1.3))
+  )
+print(gg)
+
+pdf(paste0(pdf_dir, "/metrna_variability.pdf"), width = 10, height = 4, useDingbats = FALSE)
+print(gg)
+dev.off()
+```
+
+
+
+
+

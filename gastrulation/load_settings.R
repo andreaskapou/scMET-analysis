@@ -142,6 +142,7 @@ extract_param_summaries <- function(scmet_obj, anno) {
 io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ckapoura/datasets/gastrulation/"
+  io$gene.metadata <- "~/datasets/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
   io$basedir <- "/exports/igmm/eddie/ckapoura-XDF/gastrulation/"
 } else{
@@ -149,6 +150,7 @@ if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
 }
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met_data_parsed <- paste0(io$basedir,"/met/parsed")
+io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$features  <- paste0(io$basedir, "/features/filt")
 io$cpg_density  <- paste0(io$basedir, "/met/stats/features/cpg_density_perfeature.txt.gz")
 
@@ -176,8 +178,13 @@ sample_metadata <- fread(io$metadata) %>%
   .[,stage_lineage := paste(stage, lineage10x_2,sep = "_")] %>%
   .[!(lineage10x_2 %in% opts$remove_lineage_10x_2)] %>%
   .[pass_metQC == TRUE & pass_rnaQC == TRUE] %>%
-  .[,c("id_met", "id_rna", "embryo", "plate", "stage", "lineage10x_2", "stage_lineage")] %>%
+  .[,c("sample", "id_met", "id_rna", "embryo", "plate", "stage",
+       "lineage10x_2", "stage_lineage")] %>%
   na.omit()
 
 # Define which cells to use
 opts$cells <- sample_metadata$id_met
+
+# fwrite(sample_metadata,
+#        file = "~/datasets/scMET_ms/gastrulation/metadata/Table_S4_Gastrulation_sample_metadata.csv",
+#        sep = "\t")

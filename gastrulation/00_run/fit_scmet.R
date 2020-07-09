@@ -8,7 +8,7 @@ set.seed(123)
 source("../load_settings.R")
 
 # anno <- "prom_2000_2000"
-# outdir <- "/Users/ckapoura/datasets/scMET_ms/gastrulation/data/"
+# outdir <- "~/datasets/scMET_ms/gastrulation/data/"
 # is_test <- FALSE
 # use_mcmc <- FALSE
 
