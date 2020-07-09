@@ -1,0 +1,175 @@
+---
+title: "Heatmaps for differential mean methylation"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries
+```{r}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(circlize))
+
+## I/O
+source("../../load_settings.R")
+hits_dir <- "~/datasets/scMET_ms/ecker2017/diff/hits/"
+out_dir <- "~/datasets/scMET_ms/ecker2017/diff/diff_mean/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = FALSE) }
+
+## Options
+groups <- c("Excitatory", "Inhibitory")
+# Define genomic contexts
+annot <- c(
+  "distal_H3K27ac_cortex" = "Distal H3K27ac"
+)
+
+```
+
+## Load raw data
+```{r}
+met_dt <- names(annot) %>%
+  map(~ fread(sprintf("%s/%s.tsv.gz",io$data_parsed,.), showProgress = FALSE,
+              colClasses = c("character","character","factor","numeric","integer")) %>%
+  .[V1 %in% sample_metadata$sample]
+) %>% rbindlist %>% setnames(c("sample","id","anno","rate","Ntotal"))
+# Filter features by number of CpGs
+met_dt <- met_dt[Ntotal >= 3]
+```
+
+
+## Load differenetial analysis results
+```{r}
+df <- list()
+for (an in names(annot)) {
+  tmp <- readRDS(sprintf("%s/%s_vb.rds", hits_dir, an))
+  df[[an]] <- tmp$diff_mu_summary %>% as.data.table %>%
+    .[, anno_name := annot[[an]]] %>%
+    setnames(c("feature_name"), c("id"))
+}
+df <- rbindlist(df) %>% .[, mu_diff := (mu_A - mu_B)]
+rm(tmp)
+```
+
+## Merge
+```{r}
+# Keep only features that match with processed data
+met_dt <- met_dt[id %in% (df$id)]
+met_dt[, m := rate / 100]
+
+meta <- sample_metadata[, c("sample", "Neuron_type1")] %>% 
+  setnames(c("sample", "group"))
+met_dt <- merge(met_dt, meta, by = "sample")
+# Merge with differential data
+met_dt <- merge(met_dt, df, by = "id")
+```
+
+
+# Generic plotting functions
+```{r}
+prepare_plot_data <- function(met_dt, annot = "Distal H3K27ac", test = "Inh+", 
+                              cells_thresh = 150, mu_diff_thresh = 0.65, max_nondiff = 200) {
+  met_sub <- met_dt[anno_name == annot] %>% .[, abs_mu_diff := abs(mu_diff)] %>%
+    setorder(-abs_mu_diff)
+
+  # Keep features Hyper methylated in Inhibitory class
+  dt <- met_sub[mu_diff_test == test] %>%
+    .[,Ncells := .N, by = c("id")] %>%
+    .[Ncells >= cells_thresh] %>% .[,Ncells := NULL]
+  
+  if (test %in% c("Exc+", "Inh+")) {
+    dt <- dt %>% .[abs(mu_diff) > mu_diff_thresh]
+  } else {
+    tmp <- dt %>% unique(by = "id") 
+    ids <- sample(tmp$id, max_nondiff)
+    dt <- dt[id %in% ids]
+  }
+  dt <- dt %>% setorder(id)
+  # Unique features, will be used to order the rows of heatmap
+  feats <- dt %>% unique(by = "id") 
+  
+  # Cells belonging to Exc class
+  e_group <- dt[group == "Excitatory", c("id", "sample", "m")] %>%
+    .[, m := as.numeric(m)]
+  # Cells belonging to Inh class
+  i_group <- dt[group == "Inhibitory", c("id", "sample", "m")] %>%
+    .[, m := as.numeric(m)]
+  # CReate matrix from long format
+  mat_e <- dcast(e_group, id~sample, value.var = "m", fill = NA) %>% 
+    .[, id := NULL] %>% as.matrix
+  mat_i <- dcast(i_group, id~sample, value.var = "m", fill = NA) %>% 
+    .[, id := NULL] %>% as.matrix
+  rownames(mat_e) <- feats$id
+  rownames(mat_i) <- feats$id
+  return(list(exc = mat_e, inh = mat_i, feats = feats))
+}
+
+heatmap_plot <- function(mat, feats, name = "Methylation", return_legend = FALSE, height = 5) {
+  if (return_legend) {
+    h1 <- Heatmap(mat, name = "Methylation", show_row_names = FALSE, show_column_names = FALSE, 
+              col = colorRamp2(c(0, 1), c("seagreen4", "orange")), 
+              na_col = "white", use_raster = TRUE, cluster_rows = FALSE, cluster_columns = FALSE,
+              show_column_dend = FALSE, show_row_dend = FALSE, show_heatmap_legend = TRUE,
+              row_order = order(-feats$mu_A), height = height,
+              heatmap_legend_param = list(title = "Methylation", 
+                                          #direction = "horizontal",
+                                          title_position = "lefttop-rot"))
+  } else {
+    h1 <- Heatmap(mat, name = "Methylation", show_row_names = FALSE, show_column_names = FALSE,
+                col = colorRamp2(c(0, 1), c("seagreen4", "orange")), 
+                na_col = "white", use_raster = TRUE, cluster_rows = FALSE, cluster_columns = FALSE,
+                show_column_dend = FALSE, show_row_dend = FALSE, show_heatmap_legend = FALSE,
+                height = height,
+                row_order = order(-feats$mu_A))
+  }
+  return(h1)
+}
+```
+
+# Heatmap plots
+## Inh +
+```{r, fig.height=0.6, fig.width=3, warning=FALSE, message=FALSE}
+plot_dt <- prepare_plot_data(met_dt, annot = "Distal H3K27ac", test = "Inh+", 
+                             cells_thresh = 150, mu_diff_thresh = 0.65) 
+print(NROW(plot_dt$feats))
+h1 <- heatmap_plot(mat = plot_dt$exc, feats = plot_dt$feats, return_legend = TRUE, height = 4)
+h2 <- heatmap_plot(mat = plot_dt$inh, feats = plot_dt$feats, return_legend = FALSE, height = 4)
+
+draw(h1 + h2, ht_gap = unit(0.5, "cm"))
+pdf(sprintf("%s/ecker_heatmap_h3k27ac_inh.pdf", out_dir), width = 12, height = 2.5, useDingbats = FALSE)
+draw(h1 + h2, ht_gap = unit(0.5, "cm"))
+dev.off()
+```
+
+## Exc +
+```{r, fig.height=0.6, fig.width=3, warning=FALSE, message=FALSE}
+plot_dt <- prepare_plot_data(met_dt, annot = "Distal H3K27ac", test = "Exc+", 
+                             cells_thresh = 150, mu_diff_thresh = 0.4) 
+print(NROW(plot_dt$feats))
+
+h1 <- heatmap_plot(mat = plot_dt$exc, feats = plot_dt$feats, return_legend = TRUE, height = 4)
+h2 <- heatmap_plot(mat = plot_dt$inh, feats = plot_dt$feats, return_legend = FALSE, height = 4)
+draw(h1 + h2, ht_gap = unit(0.5, "cm"))
+pdf(sprintf("%s/ecker_heatmap_h3k27ac_exc.pdf", out_dir), width = 12, height = 1.5, useDingbats = FALSE)
+draw(h1 + h2, ht_gap = unit(0.5, "cm"))
+dev.off()
+```
+
+## NoDiff
+```{r, fig.height=0.6, fig.width=3, warning=FALSE, message=FALSE}
+plot_dt <- prepare_plot_data(met_dt, annot = "Distal H3K27ac", test = "NoDiff", 
+                             cells_thresh = 150, mu_diff_thresh = 0.65, max_nondiff = 150) 
+print(NROW(plot_dt$feats))
+h1 <- heatmap_plot(mat = plot_dt$exc, feats = plot_dt$feats, return_legend = TRUE, height = 4)
+h2 <- heatmap_plot(mat = plot_dt$inh, feats = plot_dt$feats, return_legend = FALSE, height = 4)
+draw(h1 + h2, ht_gap = unit(0.5, "cm"))
+pdf(sprintf("%s/ecker_heatmap_h3k27ac_nodiff.pdf", out_dir), width = 12, height = 1.5, useDingbats = FALSE)
+draw(h1 + h2, ht_gap = unit(0.5, "cm"))
+dev.off()
+```

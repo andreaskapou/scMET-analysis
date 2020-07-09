@@ -1,0 +1,61 @@
+---
+title: "Differential testing"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ggpubr))
+
+## I/O
+source("../load_settings.R")
+data_dir <- "~/datasets/scMET_ms/ecker2017/diff/data/"
+hits_dir <- "~/datasets/scMET_ms/ecker2017/diff/hits/"
+if (!dir.exists(hits_dir)) { dir.create(hits_dir, recursive = FALSE) }
+
+## Options
+groups <- c("Excitatory", "Inhibitory")
+# Define genomic contexts
+annot <- list(
+  c("distal_H3K27ac_cortex" = "Distal H3K27ac"),
+  c("H3K4me1_cortex" = "H3K4me1"),
+  c("prom_2000_2000" = "Promoters")
+)
+```
+
+
+# Differential analysis
+```{r}
+df <- list()
+for (i in 1:length(annot)) {
+  obj <- list()
+  for (cond in groups) {
+    obj[[cond]] <- readRDS(file = sprintf("%s/%s_%s_vb.rds", 
+                                          data_dir, names(annot[[i]]), cond))
+  }
+  message("######--------------------###### \n",
+          "Annotation ", annot[[i]], "\n",
+          "######--------------------###### \n")
+  df[[annot[[i]]]] <- scmet_differential(obj_A = obj[[1]], obj_B = obj[[2]], 
+                                         psi_m = log(2), psi_e = log(1.5), psi_g = log(1.5),
+                                         evidence_thresh_m = 0.9, evidence_thresh_e = 0.8, 
+                                         evidence_thresh_g = 0.8, efdr_m = 0.05, 
+                                         efdr_e = 0.05, efdr_g = 0.05, group_label_A = "Exc", 
+                                         group_label_B = "Inh", filter_outlier_features = TRUE, 
+                                         outlier_m = 0.05, outlier_g = 0.05)
+  saveRDS(df[[annot[[i]]]], file = paste0(hits_dir, names(annot[[i]]), "_vb.rds"))
+}
+rm(obj)
+```

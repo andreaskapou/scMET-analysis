@@ -142,7 +142,8 @@ extract_param_summaries <- function(scmet_obj, anno) {
 ################
 io <- list()
 if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
-  io$basedir <- "/Users/ckapoura/datasets/ecker2017/mouse/"
+  io$basedir <- "~/datasets/ecker2017/mouse/"
+  io$gene.metadata <- "~/datasets/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
 } else if (grepl("ecdf.ed.ac.uk", Sys.info()['nodename'])) {
   io$basedir <- "/exports/igmm/eddie/ckapoura-XDF/ecker2017/mouse"
 } else{
@@ -151,8 +152,10 @@ if (grepl("S34-R31YLVDR",Sys.info()['nodename'])) {
 
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$data_parsed <- paste0(io$basedir,"/parsed_CG")
+io$data_raw <- paste0(io$basedir,"/raw_CG")
 io$features  <- paste0(io$basedir, "/features/filt")
 io$cpg_density  <- paste0(io$basedir, "/stats/features/cpg_density_perfeature.txt.gz")
+io$features2genes <- paste0(io$basedir, "/features/genes2features.txt.gz")
 
 ####################
 ## Define options ##
@@ -186,9 +189,9 @@ opts$colors1 <- c(
 
 # Colors for level 3 cell types
 opts$colors3 <- c(
-  "mL5-1" = "#696969",  "mL5-2" = "#FEB24C",
+  "mL5-1" = "#696969",  "mL5-2" = "#9A8270", #"#FEB24C",
   "mL6-1" = "#FED976",  "mL6-2" = "#FFEDA0",
-  "mDL-12" = "#FC4E2A", "mDL-3" = "#FD8D3C",
+  "mDL-1" = "#FC4E2A", "mDL-2" = "#FEB24C", "mDL-3" = "#F98227", # "#FD8D3C",
   "mL2/3" = "#E31A1C",  "mL4" = "#8B4513",
   "mVip" = "#8c96c6",   "mSst-12" = "#bae4bc",
   "mPv" = "#7bccc4",    "mNdnf-12" = "#2b8cbe"
@@ -216,7 +219,10 @@ sample_metadata %>% .[,"Neuron_type2" := as.character(Neuron_type)] %>%
 
 # Level 3 cell types
 sample_metadata %>% .[,"Neuron_type3" := as.character(Neuron_type)] %>%
-  .[,"Neuron_type3" := ifelse(Neuron_type3 %in% c("mDL-1", "mDL-2"), "mDL-12", Neuron_type3)]  %>%
   .[,"Neuron_type3" := ifelse(Neuron_type3 %in% c("mNdnf-1", "mNdnf-2"), "mNdnf-12", Neuron_type3)] %>%
   .[,"Neuron_type3" := ifelse(Neuron_type3 %in% c("mSst-1", "mSst-2"), "mSst-12", Neuron_type3)]
 
+
+# fwrite(sample_metadata,
+#        file = "~/datasets/scMET_ms/ecker2017/metadata/Table_S3_Luo2017_sample_metadata.csv",
+#        sep = "\t")

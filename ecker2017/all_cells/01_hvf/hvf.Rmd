@@ -1,0 +1,282 @@
+---
+title: "HVF calling on residual overdispersion"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ggpubr))
+
+## I/O
+source("../../load_settings.R")
+data_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
+marker_genes_file <- "~/datasets/scMET_ms/ecker2017/metadata/ecker2017_marker_genes.csv"
+out_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/"
+hits_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/hits/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+if (!dir.exists(hits_dir)) { dir.create(hits_dir, recursive = FALSE) }
+
+## Options
+# Perform HVF calling eithr using residual overdispersion (epsilon)
+# or overdispersion (gamma)
+mode <- "epsilon"
+# Define genomic contexts
+annot <- list(
+  c("distal_H3K27ac_cortex" = "Distal H3K27ac"),
+  c("H3K4me1_cortex" = "H3K4me1"),
+  c("prom_2000_2000" = "Promoters")
+)
+```
+
+# Load metadata information
+```{r}
+# Marker genes
+marker_genes <- fread(marker_genes_file)
+# Mapping features to nearest genes
+feat2genes <- fread(io$features2genes)
+```
+
+
+# HVF analysis
+```{r}
+hvf_res <- list()
+for (i in 1:length(annot)) {
+  obj <- readRDS(sprintf("%s/%s_vb.rds", data_dir, names(annot[[i]])))
+  if (mode == "epsilon") {
+    hvf_res[[annot[[i]]]] <- scmet_hvf(scmet_obj = obj, delta_e = 0.9, delta_g = NULL,
+                                       evidence_thresh = 0.8, efdr = 0.1)
+  } else {
+    hvf_res[[annot[[i]]]] <- scmet_hvf(scmet_obj = obj, delta_e = NULL, delta_g = 0.5,
+                                       evidence_thresh = 0.8, efdr = 0.1)
+  }
+}
+rm(obj)
+```
+
+# Summary of HVF analysis
+Obtain summary of HVF analysis and also store results locally
+```{r}
+hvf_summary <- list()
+for (i in 1:length(annot)) {
+  hvf_summary[[annot[[i]]]] <- hvf_res[[annot[[i]]]]$hvf$summary %>% as.data.table %>%
+    setnames("feature_name","id") %>%
+    .[, anno := names(annot[[i]])]
+  if (mode == "epsilon") {
+    hvf_summary[[annot[[i]]]] <- hvf_summary[[annot[[i]]]] %>% setorder(-tail_prob, -epsilon)
+  } else {
+    hvf_summary[[annot[[i]]]] <- hvf_summary[[annot[[i]]]] %>% setorder(-tail_prob, -gamma)
+  }
+  fwrite(hvf_summary[[i]], 
+         file = sprintf("%s/hvf_%s_%s.txt.gz", hits_dir, names(annot[[i]]), mode))
+  hvf_summary[[annot[[i]]]] %>% .[, anno_name := annot[[i]] ]
+}
+```
+
+
+# Mean overdispersion relationship 
+Below we show the mean-overdispersion relationship together with the nonlinear trend fitted by scMET, from which we can extract the residual overdispersion estimates.
+```{r, echo=FALSE, results='hide', message=FALSE, fig.width=5, fig.height=2}
+set.seed(123)
+for (an in 1:length(annot)) {
+  gg1 <- scmet_plot_mean_var(obj = hvf_res[[annot[[an]]]], y = "gamma", 
+                             task = NULL, show_fit = TRUE, nfeatures = 4500)
+  gg2 <- scmet_plot_mean_var(obj = hvf_res[[annot[[an]]]], y = "epsilon", 
+                             task = NULL, show_fit = TRUE, nfeatures = 4500)
+  plot(cowplot::plot_grid(gg1, gg2, ncol = 2))
+  pdf(paste0(out_dir, "ecker_meanvar_", names(annot[[an]]), ".pdf"),  
+      width = 8.5, height = 3, useDingbats = FALSE)
+  plot(cowplot::plot_grid(gg1, gg2, ncol = 2))
+  dev.off()
+}
+```
+
+# Mean - overdispersion plots coloured by HVF 
+Below we plot the mean - overdispersion relationship for each genomic context and we colour features as being highly variable (red) or other (grey).
+```{r, fig.width=3.7, fig.height=2.8}
+set.seed(123)
+for (an in 1:length(annot)) {
+  ##############
+  ## Add labels
+  ##############
+  hv <- copy(hvf_res[[annot[[an]]]]$hvf$summary) 
+  hv <- hv %>% as.data.table %>% setnames(c("feature_name"), c("id")) %>%
+    .[, anno := names(annot[[an]])]
+  # Map features to nearest genes
+  hv <- hv %>% merge(feat2genes[,c("id","anno","gene")], by = c("id","anno"))
+  # Store final labels
+  lab <- hv[is_variable == TRUE & gene %in% marker_genes$gene_name] %>%
+      .[,.SD[which.max(tail_prob)], by = "gene"] %>%
+    setorder(-epsilon) %>%
+    head(n = 15)
+  
+  # Total number of hits
+  sig_hits <-  hv[is_variable == TRUE, .N]
+  nonsig_hits <-  hv[is_variable == FALSE, .N]
+  ylim <- max(hv$gamma, na.rm = TRUE) + 0.1
+  gg <- scmet_plot_mean_var(obj = hvf_res[[annot[[an]]]], y = "gamma", 
+                            task = "hvf", nfeatures = 2500) +
+    theme(legend.position = c(0.9, 0.92)) +
+    annotate("text", x = 0.17, y = ylim, size = 4, 
+             label = sprintf("N=%d (%.1f%%)", 
+                             sig_hits, 100*(sig_hits/nonsig_hits))) +
+    geom_text_repel(force = 15, data = lab, aes_string(label = "gene"),
+                    size = 4, col = "black", segment.color = "black", 
+                    segment.size = 0.3, segment.alpha = 0.35, 
+                    box.padding = unit(0.5,"lines"), show.legend = FALSE
+  )
+  print(gg)
+
+  pdf(sprintf("%s/ecker_hvf_%s_%s.pdf", out_dir, names(annot[[an]]), 
+              mode), width = 6, height = 4.6)
+  print(gg)
+  dev.off()
+}
+```
+
+
+# Enrichment test of HVFs being marker genes
+```{r, fig.width=8, fig.height=3}
+set.seed(123)
+gg_list <- list()
+df_enrich_list <- list()
+for (i in 1:length(annot)) {
+  hv <- hvf_summary[[annot[[i]]]] %>%  
+    merge(feat2genes[,c("id","anno","gene")], by = c("id","anno"))
+  scmet_enrich <- hv[is_variable == TRUE & 
+                       gene %in% marker_genes$gene_name] %>% .[, .N]
+  total_hits <- hv[is_variable == TRUE] %>% .[, .N]
+  null_distr <- c()
+  dt_copy <- copy(hv)
+  for (iter in 1:1000) {
+    idx <- sample(NROW(hv), total_hits)
+    null_distr[iter] <- dt_copy[, ran_hvf := FALSE] %>% 
+      .[idx, ran_hvf := TRUE] %>%
+      .[ran_hvf == TRUE & gene %in% marker_genes$gene_name] %>% .[, .N]
+  }
+  
+  df_enrich <- data.frame(x = null_distr)
+  df_enrich_list[[i]] <- df_enrich
+  gg <- ggplot(df_enrich, aes(x = x)) +
+    geom_histogram(aes(y = ..density..), position = "identity", 
+                   fill = "grey75", color = "grey65", bins = 20) +
+    geom_vline(xintercept = scmet_enrich, color = "#E69F00", 
+               linetype = "dashed", size = 2) +
+    xlab("Enrichment null distribution") + 
+    ggtitle(annot[[i]]) + ylab("Density") +
+    theme_classic() +
+    theme(
+      legend.position = c(0.85, 0.167),
+      plot.title = element_text(hjust = 0.5),
+      axis.text = element_text(color = "black", size = rel(0.8)),
+      axis.title = element_text(color = "black", size = rel(1.1))
+    )
+  gg_list[[i]] <- gg
+}
+
+print(cowplot::plot_grid(plotlist = gg_list, ncol = 3))
+pdf(sprintf("%s/ecker_enrichment_hvf_%s.pdf", out_dir, mode), 
+    width = 11.5, height = 4.5, useDingbats = FALSE)
+cowplot::plot_grid(plotlist = gg_list, ncol = 3)
+dev.off()
+```
+
+
+# EFDR grid search plots
+```{r, echo=FALSE, results='hide', message=FALSE, fig.width=7, fig.height=2.2}
+p <- annot %>% 
+  map(~ scmet_plot_efdr_efnr_grid(obj = hvf_res[[.]], task = "hvf") + 
+        theme(legend.position = "top") + ggtitle(.) ) %>%
+  cowplot::plot_grid(plotlist = ., ncol = 3)
+print(p)
+pdf(paste0(out_dir, "ecker_efdr_", mode, ".pdf"), width = 13, height = 3.5)
+print(p)
+dev.off()
+```
+
+## Mean methylation versus HVF tail probability
+Below we show plots of the relationship between mean methylation and HVF tail probability, that shows the evidence of a feature being called as HVF. In general we do not observe any association, which implies that mean methylation is not a confounder for our HVF calling strategy.
+```{r, fig.width=7, fig.height=2.1}
+set.seed(123)
+p <- annot %>% 
+  map(~ scmet_plot_vf_tail_prob(obj = hvf_res[[.]], x = "mu", 
+                                task = "hvf", nfeatures = 2000) + 
+        ggtitle(.) + theme(legend.position = "top")) %>%
+  cowplot::plot_grid(plotlist = ., ncol = 3)
+p
+pdf(paste0(out_dir,"ecker_tailprob_vs_mu_", mode, ".pdf"), 
+    width = 10, height = 3, useDingbats = FALSE)
+print(p)
+dev.off()
+```
+
+# Summary plots
+
+## Proportion of features with $\gamma >$ 0.5
+```{r}
+to_plot <- rbindlist(hvf_summary) %>% .[,.(N = sum(gamma > 0.5) / .N), by = "anno_name"]
+p <- ggbarplot(to_plot, x = "anno_name", y = "N", fill = "gray70") +
+  labs(x = "", y = expression(paste("Proportion of features with ", gamma, " > 0.5"))) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+p
+pdf(paste0(out_dir, "ecker_hist_gamma.pdf"), width = 5, height = 3)
+print(p)
+dev.off()
+```
+
+## Variability distribution across all genomic contexts
+
+### Residual overdispersion $\epsilon$
+```{r}
+to_plot <- rbindlist(hvf_summary)
+p <- ggdensity(to_plot, x = "epsilon", y = "..density..", fill = "anno_name", alpha = 0.3) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = expression(paste("Residual overdispersion ", epsilon)), y = "Density") +
+  theme(legend.title = element_blank()) +
+  xlim(c(-2.7, 2.7))
+p
+pdf(sprintf("%s/ecker_density_epsilon.pdf", out_dir), width = 5, 
+    height = 3, useDingbats = FALSE)
+print(p)
+dev.off()
+```
+
+### Overdispersion $\gamma$
+```{r}
+p <- ggdensity(to_plot, x = "gamma", y = "..density..", fill = "anno_name", alpha = 0.3) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = expression(paste("Overdispersion ", gamma)), y = "Density") +
+  geom_vline(xintercept = 0.5, color = "black", linetype = "dashed", size = 2) +
+  theme(legend.title = element_blank())
+p
+pdf(sprintf("%s/ecker_density_gamma.pdf", out_dir), width = 5, 
+    height = 3, useDingbats = FALSE)
+print(p)
+dev.off()
+```
+
+
+### Mean methylation rate $\mu$
+```{r}
+p <- ggdensity(to_plot, x = "mu", y = "..density..", fill = "anno_name", alpha = 0.3) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = expression(paste("Mean methylation ", mu)), y = "Density") +
+  theme( legend.title = element_blank())
+p
+pdf(sprintf("%s/ecker_density_mu.pdf", out_dir), width = 5, 
+    height = 3, useDingbats = FALSE)
+print(p)
+dev.off()
+```
+

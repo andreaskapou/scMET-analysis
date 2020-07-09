@@ -1,0 +1,172 @@
+---
+title: "HVF ranking as feature selection for downstream analysis"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(MOFA2))
+
+## I/O
+source("../../load_settings.R")
+data_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/dimred_hvf/data/"
+out_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/dimred_hvf/analysis/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+
+# Define genomic contexts
+annot <- c(
+  "distal_H3K27ac_cortex" = "Distal H3K27ac",
+  "H3K4me1_cortex" = "H3K4me1",
+  "prom_2000_2000" = "Promoters"
+)
+# Define models
+models <- c(
+  "scmet",
+  "binomial",
+  "gaussian"
+)
+# Number of highly variable features
+number.hvf <- c(seq(50, 1000, by = 50))
+
+# Metrics to plot
+metrics <- c(
+  "purity" = "Cluster purity",
+  "ari" = "Adjusted Rand index"
+)
+```
+
+# Load pre-computed results
+```{r}
+foo <- list()
+# laod gamma
+for (model in models) {
+  for (i in names(annot)) {
+    for (j in number.hvf) {
+      file <- sprintf("%s/%s_%s_%d_clustering.txt", data_dir, model, i, j)
+      if (file.exists(file)) {
+        foo[[file]] <- fread(file)
+      } else {
+        print(file)
+      }
+    }
+  }
+}
+```
+
+# Clustering performance
+```{r, fig.width=4, fig.height=1.6, message=FALSE, warning=FALSE}
+to.plot <- rbindlist(foo) %>%
+  .[,anno := stringr::str_replace_all(anno, annot)] %>%
+  melt(id.vars = c("anno","model","hvf"), variable.name = "metric") %>%
+  setorder(anno,model,hvf) %>%
+  .[,value2 := frollmean(value, align = "right", n = 4), 
+    by = c("anno","model","metric")] %>%
+  .[is.na(value2),value2 := value]
+to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian"),
+                        labels = c("scMET", "Binomial", "Gaussian"))
+##########
+## Plot ##
+##########
+for (i in names(metrics)) {
+  p <- ggplot(to.plot[metric == i], aes(x = hvf, y = value2, 
+                                        fill = model, colour = model)) +
+  #geom_jitter(size = 2.1, width = 0.15, height = -0.1, shape = 21) +
+  #geom_point(size = 2, shape = 21, alpha = 0.8) +
+  geom_smooth(aes(fill = model), span = 0.35, method = "loess",
+              se = FALSE, size = 1.4, alpha = 0.25) +
+  facet_wrap(~anno, nrow = 1, scales = "fixed") +
+  labs(x = "Number of HVFs", y = metrics[i], title = NULL) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 4)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  scale_fill_manual(values = c("#E69F00", "#999999", "#56B4E9")) +
+  scale_colour_manual(values = c("#E69F00", "#999999", "#56B4E9")) +
+  theme_classic() +
+  theme(
+    legend.position = c(0.92, 0.82), #"right",
+    legend.margin = margin(t = -.1, r = 0, b = -0.2, l = 0, unit = "cm"),
+    legend.title = element_blank(),
+    strip.text = element_text(color = "black", size = rel(1.1)),
+    legend.text = element_text(color = "black", size = rel(1.15)),
+    axis.text = element_text(color = "black", size = rel(0.8)),
+    axis.title = element_text(color = "black", size = rel(1.1))
+  )
+  print(p)
+  pdf(sprintf("%s/ecker_cluster_%s.pdf", out_dir, i), width = 8, height = 3.3)
+  print(p)
+  dev.off()
+}
+```
+
+
+# UMAP visualisation
+```{r, message=FALSE, warning=FALSE}
+number.hvf <- c(100, 500, 1000, 2000)
+# UMAP parameters
+n_neighbors <- 20
+min_dist <- 0.6
+
+umap_plots <- list()
+for (model in models) {
+  for (i in names(annot)) {
+    for (j in number.hvf) {
+      file <- sprintf("%s/%s_%s_%d.hdf5", data_dir, model, i, j)
+      if (file.exists(file)) {
+        mofa <- load_model(file, remove_inactive_factors = TRUE, load_data = FALSE)
+        # Add cell metadata to the model
+        samples_metadata(mofa) <- sample_metadata[sample %in% samples_names(mofa)[[1]]] %>%
+          setkey(sample) %>% .[samples_names(mofa)[[1]]]
+        # Run UMAP
+        set.seed(42)
+        mofa <- run_umap(mofa, n_neighbors = n_neighbors, min_dist = min_dist)
+
+        # Plot UMAP
+        umap_plots[[file]] <- plot_dimred(mofa, method = "UMAP", color_by = "Neuron_type3",
+                                          dot_size = 2.2, stroke = 0.25, rasterize = TRUE) +
+          ggtitle(sprintf("HVF = %s", j)) +
+          scale_fill_manual(values = opts$colors3) +
+          theme(
+            plot.title = element_text(size = 19, hjust = 0.5),
+            axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            legend.position = "none"
+          )
+
+        # Save plot
+        # pdf(sprintf("%s/%s_umap_%s_%d.pdf", umap_dir, i, model, j), width = 6, height = 4)
+        # print(umap_plots[[file]])
+        # dev.off()
+      } else {
+        print(file)
+      }
+    }
+  }
+}
+```
+
+## Joint UMAP plots
+```{r}
+# ################
+# ## Joint plot ##
+# ################
+for (model in models) {
+  for (i in names(annot)) {
+    subset_plots <- grep(paste0(model, "_", i), names(umap_plots))
+    p <- cowplot::plot_grid(plotlist = umap_plots[subset_plots], nrow = 1, ncol = 4)
+    pdf(sprintf("%s/ecker_umap_%s_%s.pdf", out_dir, model, i), width = 16, height = 4)
+    print(p)
+    dev.off()
+  }
+}
+```
+

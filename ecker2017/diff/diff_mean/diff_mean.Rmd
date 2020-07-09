@@ -1,0 +1,175 @@
+---
+title: "Differential mean methylation analysis"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ggpubr))
+
+## I/O
+source("../../load_settings.R")
+hits_dir <- "~/datasets/scMET_ms/ecker2017/diff/hits/"
+out_dir <- "~/datasets/scMET_ms/ecker2017/diff/diff_mean/"
+marker_genes_file <- "~/datasets/scMET_ms/ecker2017/metadata/ecker2017_marker_genes.csv"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = FALSE) }
+
+## Options
+groups <- c("Excitatory", "Inhibitory")
+# Define genomic contexts
+annot <- c(
+  "distal_H3K27ac_cortex" = "Distal H3K27ac",
+  "H3K4me1_cortex" = "H3K4me1",
+  "prom_2000_2000" = "Promoters"
+)
+```
+
+# Load metadata information
+```{r}
+# Marker genes
+marker_genes <- fread(marker_genes_file)
+# Mapping features to nearest genes
+feat2genes <- fread(io$features2genes)
+```
+
+
+# Load differenetial analysis results
+```{r}
+df <- list()
+for (an in names(annot)) {
+  df[[an]] <- readRDS(sprintf("%s/%s_vb.rds", hits_dir, an))
+}
+```
+
+
+# Volcano plots
+```{r, fig.width=3, fig.height=2}
+set.seed(123)
+for (an in names(annot)) {
+  ##############
+  ## Add labels
+  ##############
+  foo <- copy(df[[an]]$diff_mu_summary) 
+  foo <- foo %>% as.data.table %>% setnames(c("feature_name"), c("id")) %>%
+    .[, anno := an]
+  # Map features to nearest genes
+  foo <- foo %>% merge(feat2genes[,c("id","anno","gene")], by = c("id","anno"))
+  lab_exc <- foo[mu_diff_test %in% c("Exc+") & gene %in% marker_genes$gene_name] %>% 
+    .[,.SD[which.max(mu_tail_prob)], by = "gene"] %>%
+    setorder(-mu_LOR) %>% head(n = 5)
+  lab_inh <- foo[mu_diff_test %in% c("Inh+") & gene %in% marker_genes$gene_name] %>% 
+    .[,.SD[which.max(mu_tail_prob)], by = "gene"] %>%
+    setorder(mu_LOR)
+  
+  if (an == "distal_H3K27ac_cortex") {
+    lab_inh <- lab_inh[gene %in% c("Cux1", "Tle4", "Sv2b", "Neurod6", "Arpp21")]
+  } else {
+    lab_inh <- lab_inh %>% head(n = 5)
+      
+  }
+  lab <- rbind(lab_exc, lab_inh)
+  
+  x_left <- min(foo[["mu_LOR"]]) + 1.2
+  x_right <- max(foo[["mu_LOR"]]) - 0.8
+  # Count proportions on original feature data, since 
+  # duplicates arise from mapping with nearest genes.
+  foo_unique <- unique(foo, by = "id")
+  A_hits <- foo_unique[mu_diff_test == "Exc+", .N]
+  B_hits <- foo_unique[mu_diff_test == "Inh+", .N]
+  
+  gg <- scmet_plot_volcano(diff_obj = df[[an]], task = "diff_mu", nfeatures = 600,
+                           xlab = expression(paste("Change in mean: LOR(", 
+                                                   mu[exc], ", ", mu[inh], ")"))) + 
+    theme(legend.position = c(0.87, 0.15)) + 
+    annotate("text", x = x_right, y = 1.2, size = 2.8, 
+             label = sprintf("N=%d (%.1f%%)", A_hits, 100*(A_hits/foo_unique[,.N]))) + 
+    annotate("text", x = x_left, y = 1.2, size = 2.8, 
+             label = sprintf("N=%d (%.1f%%)",B_hits, 100 * (B_hits / foo_unique[,.N]))) +
+    geom_text_repel(force = 10, data = lab, aes_string(label = "gene"),
+                    size = 3.4, col = "black", segment.color = "black", 
+                    segment.size = 0.3, segment.alpha = 0.35, 
+                    box.padding = unit(0.5,"lines"), show.legend = FALSE)
+  print(gg)
+  pdf(sprintf("%s/ecker_diffmean_volcano_%s.pdf", out_dir, an), width = 4.9, height = 4.2)
+  print(gg)
+  dev.off()
+}
+```
+
+
+# Enrichment test of DM features being marker genes
+```{r, fig.width=8, fig.height=3, message=FALSE, warning=FALSE}
+set.seed(123)
+gg_list <- list()
+df_enrich_list <- list()
+for (an in names(annot)) {
+  foo <- copy(df[[an]]$diff_mu_summary) 
+  foo <- foo %>% as.data.table %>% setnames(c("feature_name"), c("id")) %>%
+    .[, anno := an]
+  # Map features to nearest genes
+  foo <- foo %>% merge(feat2genes[,c("id","anno","gene")], by = c("id","anno"))
+  
+  scmet_enrich <- foo[mu_diff_test %in% c("Exc+", "Inh+") & 
+                        gene %in% marker_genes$gene_name] %>% .[, .N]
+  total_hits <- foo[mu_diff_test %in% c("Exc+", "Inh+")] %>% .[, .N]
+  null_distr <- c()
+  dt_copy <- copy(foo)
+  for (iter in 1:1000) {
+    idx <- sample(NROW(foo), total_hits)
+    null_distr[iter] <- dt_copy[, ran_hit := FALSE] %>% 
+      .[idx, ran_hit := TRUE] %>%
+      .[ran_hit == TRUE & gene %in% marker_genes$gene_name] %>% .[, .N]
+  }
+  
+  df_enrich <- data.frame(x = null_distr)
+  df_enrich_list[[an]] <- df_enrich
+  gg <- ggplot(df_enrich, aes(x = x)) +
+    geom_histogram(aes(y = ..density..), position = "identity", 
+                   fill = "grey75", color = "grey65", bins = 20) +
+    geom_vline(xintercept = scmet_enrich, color = "#E69F00", 
+               linetype = "dashed", size = 2) +
+    xlab("Enrichment null distribution") + 
+    ggtitle(annot[[an]]) + ylab("Density") +
+    theme_classic() +
+    theme(
+      legend.position = c(0.85, 0.167),
+      plot.title = element_text(hjust = 0.5),
+      axis.text = element_text(color = "black", size = rel(0.8)),
+      axis.title = element_text(color = "black", size = rel(1.1))
+    )
+  gg_list[[an]] <- gg
+}
+
+print(cowplot::plot_grid(plotlist = gg_list, ncol = 3))
+pdf(sprintf("%s/ecker_enrichment_dm.pdf", out_dir), 
+    width = 11.5, height = 4.5, useDingbats = FALSE)
+cowplot::plot_grid(plotlist = gg_list, ncol = 3)
+dev.off()
+```
+
+
+# EFDR grid search plots
+```{r, echo=FALSE, results='hide', message=FALSE, fig.width=7, fig.height=2.2}
+p <- names(annot) %>% 
+  map(~ scmet_plot_efdr_efnr_grid(obj = df[[.]], task = "diff_mu") + 
+        theme(legend.position = "top") + ggtitle(annot[[.]]) ) %>%
+  cowplot::plot_grid(plotlist = ., ncol = 3)
+print(p)
+pdf(paste0(out_dir, "ecker_efdr_diff_mu.pdf"), width = 13, height = 3.5)
+print(p)
+dev.off()
+```
+
+

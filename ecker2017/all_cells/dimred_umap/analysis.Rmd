@@ -1,0 +1,104 @@
+---
+title: "HVF selection and UMAP"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(MOFA2))
+
+## I/O
+source("../../load_settings.R")
+data_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/dimred_umap/data/"
+out_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/dimred_umap/analysis/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+# MOFA file object
+file <- sprintf("%s/8k_k27ac_k4me1.hdf5", data_dir)
+
+# UMAP parameters
+n_neighbors <- 15
+min_dist <- 1
+```
+
+
+# UMAP visualisation
+```{r, message=FALSE, warning=FALSE}
+if (file.exists(file)) {
+  mofa <- load_model(file, remove_inactive_factors = TRUE, load_data = FALSE)
+  # Add cell metadata to the model
+  samples_metadata(mofa) <- sample_metadata[sample %in% samples_names(mofa)[[1]]] %>%
+    setkey(sample) %>% .[samples_names(mofa)[[1]]]
+  # Run UMAP
+  set.seed(42)
+  mofa <- run_umap(mofa, n_neighbors = n_neighbors, min_dist = min_dist)
+
+  # Plot UMAP
+  gg <- plot_dimred(mofa, method = "UMAP", color_by = "Neuron_type3",
+                    dot_size = 2.5, stroke = 0.12, rasterize = FALSE) +
+    scale_fill_manual(values = opts$colors3) +
+    theme(axis.line = element_blank(),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          legend.position = "none",
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank())
+  plot(gg)
+  # Save plot
+  pdf(sprintf("%s/ecker_umap.pdf", out_dir), width = 6, height = 4, useDingbats = FALSE)
+  plot(gg)
+  dev.off()
+} else {
+  print(file)
+}
+```
+
+
+## Summary information of each subpopulation
+```{r, fig.width=6.5, fig.height=1.9}
+library(ggplot2)
+df <- sample_metadata[, c("Neuron_type1", "Neuron_type3")]
+df <- df[, .N, by = c("Neuron_type3", "Neuron_type1")]
+
+p <- ggplot(data = df, aes(x = Neuron_type3, y = N, fill = Neuron_type3)) +
+  geom_bar(stat = "identity", color = "black") + 
+  geom_text(aes(label = N), vjust = -0.3, size = 5.5) +
+  scale_fill_manual(values = opts$colors3) +
+  labs(x = NULL, y = "Number of cells", title = NULL) +
+  ylim(c(0, 720)) + theme_classic() +
+  theme(
+    legend.position = "none",
+    legend.title = element_blank(),
+    legend.margin = margin(-2, 0, -2, 0),
+    legend.box.margin = margin(-2, 0, -2, 0),
+    panel.spacing.y = unit(3, "lines"),
+    plot.tag = element_text(color = "black", face = "bold", size = rel(1.6)),
+    legend.text = element_text(color = "black", size = rel(1.1)),
+    strip.text = element_text(color = "black", size = rel(1.1)),
+    axis.text = element_text(color = "black", size = rel(1)),
+    axis.text.x = element_text(color = "black", size = rel(1.5)),
+    axis.title = element_text(color = "black", size = rel(1.8))
+  )
+print(p)
+# Save plot
+pdf(sprintf("%s/ecker_celltypes.pdf", out_dir), width = 16, height = 3, useDingbats = FALSE)
+plot(p)
+dev.off()
+```
+
