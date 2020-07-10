@@ -89,7 +89,7 @@ to.plot <- rbind(to.plot[to.plot$rna_is_variable == TRUE, ], tmp)
 mode <- c("rna_delta", "rna_epsilon") 
 y_lab <- list(
   "rna_delta" = "RNA log overdispersion",
-  "rna_epsilon" = "RNA log residual overdispersion"
+  "rna_epsilon" = "RNA residual overdispersion"
 )
 for (m in mode) {
   gg <- ggplot(to.plot, aes_string(x = "rna_mu", y = m)) +

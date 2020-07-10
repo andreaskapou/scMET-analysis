@@ -36,8 +36,8 @@ df <- fread(sprintf("%s/met_hvf.txt.gz", io$hits_dir)) %>%
 if (opts$show_hits == "marker_genes") {
   # Marker genes
   marker_genes <- c(
-    "Apob", "Cer1", "Cubn", "Dppa2", "Dppa5a", "Fmr1nb", "Id3", "Krt8",
-    "Lefty2", "Mesp1", "Morc1", "Spp1", "Trap1a", "Zfp42",
+    "Apob", "Cer1", "Cubn", "Dppa2", "Dppa5a", "Fmr1nb", "Id3", "Krt8", "Aplnr",
+    "Lefty2", "Mesp1", "Morc1", "Spp1", "Trap1a", "Zfp42", "Cldn6", "Mixl1",
     "Gnas", "Usp29", "Brwd3", "Hs6st2", "Yipf6", "Magt1", "Hcfc1",
     "Pnpt1", "Hnrnph2", "Ar", "Pak1ip1", "Rpl10", "Ubqln2", "Zrsr1")
   df <- df[symbol %in% marker_genes]
