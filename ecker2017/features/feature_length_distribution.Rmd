@@ -1,0 +1,94 @@
+---
+title: "Length distribution of pre-annotated features"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ggpubr))
+
+## I/O
+source("../load_settings.R")
+out_dir <- "~/datasets/scMET_ms/ecker2017/features/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+# Define genomic contexts
+anno_names <- c("distal_H3K27ac_cortex", "H3K4me1_cortex")
+anno_plot_names <- c("Distal H3K27ac", "H3K4me1")
+```
+
+
+# Keep only annos that pass filtering/QC
+```{r}
+####################################
+## Load / filter methylation data ##
+Y <- list()
+for (i in anno_names){
+Y[[i]] <- read_filter_ecker_data(filename = sprintf("%s/%s.tsv.gz", io$data_parsed, i),
+                                 opts = opts, is_differential = FALSE)
+}
+feat_names <- lapply(Y, function(x) unique(x$Feature))
+```
+
+# Read and keep annotation feature information
+```{r}
+anno <- list()
+for (i in 1:length(anno_names)) {
+  anno[[i]] <- fread(paste0(anno_names[i], ".bed.gz")) %>%
+    .[, c(2, 3, 5)] %>% setnames(c("start", "end", "id")) %>%
+    .[id %in% feat_names[[anno_names[i]]]] %>% .[, length := (end - start)] %>%
+    .[, anno_name := anno_plot_names[i]] %>%
+    .[, anno := anno_names[i]]
+}
+anno <- rbindlist(anno)
+rm(i)
+```
+
+## Plot annotation feature length distribution
+```{r}
+ggboxplot(anno, x =  "anno_name", y = "length", ylab = "Feature length", 
+          xlab = "", fill = "cornflowerblue") +
+  coord_cartesian(ylim = c(0, 2500))
+```
+
+
+# Relationship of feature length with estimated mean methylation and overdispersion
+```{r}
+fitdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
+fit_dt <- anno_names %>%
+  map(~ fread(sprintf("%s/%s_vb.txt.gz", fitdir, .))) %>%
+  rbindlist %>% .[,c("mu_median","gamma_median","epsilon_median",
+                     "Feature","anno")] %>%
+  setnames(c("mu", "gamma", "epsilon", "id", "anno"))
+```
+
+## Merge data
+```{r}
+df_merged <- merge(fit_dt, anno, by = c("anno", "id"))
+```
+
+
+```{r}
+for (an in anno_names) {
+  df <- df_merged[anno == an] 
+  gg1 <- ggplot(df, aes(x = length, y = mu)) +
+    geom_point(size = 1) + xlab("Feature length") + ylab("Mean methylation") +
+    coord_cartesian(xlim = c(0, 2500))
+  gg2 <- ggplot(df, aes(x = length, y = gamma)) +
+    geom_point(size = 1) + xlab("Feature length") + ylab("Overdispersion") +
+    coord_cartesian(xlim = c(0, 2500))
+  print(cowplot::plot_grid(gg1, gg2))
+}
+```
+

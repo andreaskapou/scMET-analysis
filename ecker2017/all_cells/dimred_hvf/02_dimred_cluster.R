@@ -54,6 +54,20 @@ if (args$model == "binomial") {
 } else if (args$model == "scmet") {
   hvf_hits <- fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, args$anno))
   hvfs <- hvf_hits %>% setorder(-tail_prob, -epsilon) %>% head(n = args$hvf) %>% .$id
+} else if (args$model == "normdisp") {
+  hvfs <- fread(sprintf("%s/%s_norm_dispersion.txt.gz", io$fitdir, args$anno)) %>%
+    .[,c("Feature", "dispersion_norm", "anno")] %>%
+    setnames(c("id", "dispersion_norm", "anno")) %>%
+    setorder(-dispersion_norm) %>%
+    head(n = args$hvf) %>% .$id
+} else if (args$model == "normdispbeta") {
+  hvfs <- fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, args$anno)) %>%
+    .[,c("Feature", "dispersion_norm", "anno")] %>%
+    setnames(c("id", "dispersion_norm", "anno")) %>%
+    setorder(-dispersion_norm) %>%
+    head(n = args$hvf) %>% .$id
+} else if (args$model == "random") {
+  hvfs <- fit_dt[sample(NROW(fit_dt)),] %>% head(n = args$hvf) %>% .$id
 } else {
   stop("Wrong model specification")
 }

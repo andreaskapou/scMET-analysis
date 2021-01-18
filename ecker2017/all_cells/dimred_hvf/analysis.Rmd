@@ -34,7 +34,9 @@ annot <- c(
 models <- c(
   "scmet",
   "binomial",
-  "gaussian"
+  "gaussian",
+  "normdisp",
+  "random"
 )
 # Number of highly variable features
 number.hvf <- c(seq(50, 1000, by = 50))
@@ -73,8 +75,8 @@ to.plot <- rbindlist(foo) %>%
   .[,value2 := frollmean(value, align = "right", n = 4), 
     by = c("anno","model","metric")] %>%
   .[is.na(value2),value2 := value]
-to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian"),
-                        labels = c("scMET", "Binomial", "Gaussian"))
+to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian", "normdisp", "random"),
+                          labels = c("scMET", "Binomial", "Gaussian", "Dispersion norm", "Random"))
 ##########
 ## Plot ##
 ##########
@@ -84,16 +86,17 @@ for (i in names(metrics)) {
   #geom_jitter(size = 2.1, width = 0.15, height = -0.1, shape = 21) +
   #geom_point(size = 2, shape = 21, alpha = 0.8) +
   geom_smooth(aes(fill = model), span = 0.35, method = "loess",
-              se = FALSE, size = 1.4, alpha = 0.25) +
+              se = FALSE, size = 1.3, alpha = 0.15) +
   facet_wrap(~anno, nrow = 1, scales = "fixed") +
   labs(x = "Number of HVFs", y = metrics[i], title = NULL) +
   scale_y_continuous(breaks = scales::pretty_breaks(n = 4)) +
   scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
-  scale_fill_manual(values = c("#E69F00", "#999999", "#56B4E9")) +
-  scale_colour_manual(values = c("#E69F00", "#999999", "#56B4E9")) +
+  scale_fill_manual(values = c("#E69F00", "#999999", "#56B4E9", "coral3", "steelblue4")) +
+  scale_colour_manual(values = c("#E69F00", "#999999", "#56B4E9", "coral3", "steelblue4")) +
   theme_classic() +
   theme(
-    legend.position = c(0.92, 0.82), #"right",
+    #legend.position = c(0.92, 0.82), #"right",
+    legend.position = c(0.89, 0.8), #"right",
     legend.margin = margin(t = -.1, r = 0, b = -0.2, l = 0, unit = "cm"),
     legend.title = element_blank(),
     strip.text = element_text(color = "black", size = rel(1.1)),
@@ -102,7 +105,7 @@ for (i in names(metrics)) {
     axis.title = element_text(color = "black", size = rel(1.1))
   )
   print(p)
-  pdf(sprintf("%s/ecker_cluster_%s.pdf", out_dir, i), width = 8, height = 3.3)
+  pdf(sprintf("%s/ecker_cluster_rev1_%s.pdf", out_dir, i), width = 8, height = 3.3)
   print(p)
   dev.off()
 }
