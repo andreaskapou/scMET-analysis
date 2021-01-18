@@ -17,9 +17,11 @@ opts$anno <- c(
 
 # Define which model to fit
 opts$models <- c(
-  "scmet",
-  "binomial",
-  "gaussian"
+  #"scmet",
+  #"binomial",
+  #"gaussian",
+  #"normdispbeta",
+  "random"
 )
 
 # Number of highly variable features
@@ -28,12 +30,12 @@ opts$number.hvf <- c(seq(50, 1000, by = 50), 2000)
 #########
 ## Run ##
 mclapply(X = opts$models, function(model) {
-  for (an in opts$anno) {
+  mclapply(X = opts$anno, function(an) {
     mclapply(X = opts$number.hvf, FUN = function(hvf) {
       outprefix <- sprintf("%s/%s_%s_%d", out_dir, model, an, hvf)
       cmd <- sprintf("Rscript 02_dimred_cluster.R --model %s --anno %s --hvf %d --outprefix %s",
                      model, an, hvf, outprefix)
       system(cmd)
-    }, mc.cores = 3)
-  }
+    }, mc.cores = 4)
+  }, mc.cores = 3)
 }, mc.cores = 3)
