@@ -17,10 +17,11 @@ opts$anno <- c(
 
 # Define which model to fit
 opts$models <- c(
-  "scmet",
-  "binomial",
-  "gaussian",
-  "normdispbeta",
+  #"scmet",
+  #"binomial",
+  #"gaussian",
+  #"normdispbeta",
+  #"normdispbetasign"
   "random"
 )
 
@@ -36,6 +37,6 @@ mclapply(X = opts$models, function(model) {
       cmd <- sprintf("Rscript 02_dimred_cluster.R --model %s --anno %s --hvf %d --outprefix %s",
                      model, an, hvf, outprefix)
       system(cmd)
-    }, mc.cores = 4)
+    }, mc.cores = 3)
   }, mc.cores = 3)
 }, mc.cores = 3)

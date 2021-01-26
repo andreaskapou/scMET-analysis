@@ -35,7 +35,7 @@ models <- c(
   "scmet",
   "binomial",
   "gaussian",
-  "normdisp",
+  "normdispbetasign",
   "random"
 )
 # Number of highly variable features
@@ -75,7 +75,7 @@ to.plot <- rbindlist(foo) %>%
   .[,value2 := frollmean(value, align = "right", n = 4), 
     by = c("anno","model","metric")] %>%
   .[is.na(value2),value2 := value]
-to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian", "normdisp", "random"),
+to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian", "normdispbetasign", "random"),
                           labels = c("scMET", "Binomial", "Gaussian", "Dispersion norm", "Random"))
 ##########
 ## Plot ##

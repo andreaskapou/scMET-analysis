@@ -24,6 +24,8 @@ set.seed(123)
   df$bin_disp_median <- var_by_bin$bin_median[match(df$mean_bin, var_by_bin$mean_bin)]
   df$bin_disp_mad <- var_by_bin$bin_mad[match(df$mean_bin, var_by_bin$mean_bin)]
   df$dispersion_norm <- with(df, abs(dispersion - bin_disp_median) / bin_disp_mad)
+  # Potentially a bug in the original implementation. Removing absolute value
+  df$dispersion_norm_sign <- with(df, (dispersion - bin_disp_median) / bin_disp_mad)
   df$Feature <- colnames(m)
   return(df)
 }
@@ -34,7 +36,7 @@ set.seed(123)
 source("../../load_settings.R")
 
 # annos: "distal_H3K27ac_cortex", "H3K4me1_cortex", "prom_2000_2000"
-anno <- "prom_2000_2000"
+anno <- "distal_H3K27ac_cortex"
 outdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
 is_test <- FALSE
 
@@ -51,7 +53,7 @@ if (is_test) {
 # Calculate M value from Beta value (for now leave to Beta values)
 Y <- Y %>%
   .[, rate := met_reads / total_reads] %>%
-  #.[, m := log2(((rate) + 0.01) / (1 - (rate) + 0.01))] %>%
+  #.[, m := log2((rate + 0.02) / (1 - rate + 0.02))] %>%
   .[, m := rate] %>%
   .[, c("Feature", "Cell", "m")]
 
@@ -63,6 +65,45 @@ Y_mat <- Y_mat %>% as.data.frame %>% remove_rownames %>%
 # Compute normalized dispersion estimates
 df <- .get_norm_dispersion(Y_mat)
 df$anno <- anno
+
+# tt <- df[rownames(df) %in% c("distal_H3K27ac_cortex_11725", "distal_H3K27ac_cortex_13166",
+#                              "distal_H3K27ac_cortex_28573", "distal_H3K27ac_cortex_1480",
+#                              "distal_H3K27ac_cortex_24013", "distal_H3K27ac_cortex_25912"), ]
+# plot(df$mean, df$dispersion_norm)
+
+
+# tmp_dt <- Y_mat[, colnames(Y_mat) %in% c("distal_H3K27ac_cortex_11725", "distal_H3K27ac_cortex_13166",
+#                                          "distal_H3K27ac_cortex_28573", "distal_H3K27ac_cortex_1480",
+#                                          "distal_H3K27ac_cortex_24013", "distal_H3K27ac_cortex_25912",
+#                                          "distal_H3K27ac_cortex_10558")]
+#
+# # library(vioplot)
+# # vioplot(tmp_dt, col="gold", srt = 45)
+#
+#
+# Y_tmp <- copy(Y)
+# Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_11725", "distal_H3K27ac_cortex_13166",
+#                             "distal_H3K27ac_cortex_28573", "distal_H3K27ac_cortex_1480",
+#                             "distal_H3K27ac_cortex_24013", "distal_H3K27ac_cortex_25912"), ]
+#
+#
+# ggplot(Y_tmp, aes(x = Feature, y = m, fill = Feature)) +
+#   geom_jitter(size = 0.8, alpha = 0.6, width = 0.25) +
+#   geom_violin(alpha = 0.5) +
+#   #scale_fill_manual(values = opts$colors3) +
+#   labs(x = NULL, y = "Methylation", title = NULL) +
+#   theme_classic() +
+#   theme(
+#     plot.title = element_text(colour = "black", size = rel(0.7), hjust = 0.5),
+#     axis.title.y = element_text(colour = "black", size = rel(1.1)),
+#     axis.title.x = element_text(colour = "black", size = rel(1.1)),
+#     axis.text.x = element_text(colour = "black", size = rel(1.0), angle=40, hjust = 1),
+#     #axis.text.x = element_text(colour="black", size=rel(1.0), angle=30, hjust=1),
+#     axis.text.y = element_text(colour = "black", size = rel(0.8)),
+#     axis.text = element_text(colour = "black", size = rel(1.0)),
+#     strip.text = element_text(colour = "black", size = rel(1.2)),
+#     legend.position = "none"
+#   )
 
 ##########
 ## Save ##

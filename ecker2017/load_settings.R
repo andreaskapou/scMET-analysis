@@ -22,7 +22,7 @@ read_cpg_density <- function(filename, feature_names, annotation) {
 
 # Read methylation data and perform filtering
 read_filter_ecker_data <- function(filename, opts, sample_metadata = NULL,
-                                   is_differential = FALSE) {
+                                   anno_dt = NULL, is_differential = FALSE) {
   if (length(opts$groups) > 2) {
     stop("Currently we perform analysis for 2 groups!")
   }
@@ -44,6 +44,14 @@ read_filter_ecker_data <- function(filename, opts, sample_metadata = NULL,
     .[, met_reads := round((rate/100) * total_reads)]
   cat("Total # cells: ", length(unique(met$Cell)), "\n")
   cat("Total # features: ", length(unique(met$Feature)), "\n")
+
+  # Run analysis for specific chromosome or window features
+  if (!is.null(anno_dt)) {
+    cat("Keep given annotation regions.")
+    met <- met[Feature %in% anno_dt$id, ]
+    cat("Total # cells: ", length(unique(met$Cell)), "\n")
+    cat("Total # features: ", length(unique(met$Feature)), "\n")
+  }
 
   # If differential testing, add group information to met object
   if (is_differential) {

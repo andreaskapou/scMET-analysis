@@ -7,6 +7,7 @@ suppressPackageStartupMessages(library(argparse))
 suppressPackageStartupMessages(library(MOFA2))
 suppressPackageStartupMessages(library(hdf5r))
 suppressPackageStartupMessages(library(rhdf5))
+suppressPackageStartupMessages(library(tidyverse))
 set.seed(12345)
 
 # Source settings
@@ -30,7 +31,7 @@ args <- p$parse_args(commandArgs(TRUE))
 ## Load pre-computed parameter estimates
 ##############################
 fit_dt <- args$anno %>%
-  map(~ fread(sprintf("%s/%s_vb.txt.gz", io$fitdir, .))) %>%
+  purrr::map(~ fread(sprintf("%s/%s_vb.txt.gz", io$fitdir, .))) %>%
   rbindlist %>% .[,c("mu_median","gamma_median","epsilon_median",
                      "gauss_var", "binom_var", "Feature","anno")] %>%
   setnames(c("mu", "gamma", "epsilon", "gauss_var", "binom_var", "id", "anno"))
@@ -39,7 +40,7 @@ fit_dt <- args$anno %>%
 ## Load methylation data ##
 ###########################
 met_dt <- args$anno %>%
-  map(~ fread(sprintf("%s/%s.tsv.gz",io$data_parsed,.), showProgress = FALSE,
+  purrr::map(~ fread(sprintf("%s/%s.tsv.gz",io$data_parsed,.), showProgress = FALSE,
               colClasses = c("character","character","factor","numeric","integer")) %>%
   .[V1%in%sample_metadata$sample]
 ) %>% rbindlist %>% setnames(c("sample","id","anno","rate","Ntotal"))
@@ -65,6 +66,12 @@ if (args$model == "binomial") {
     .[,c("Feature", "dispersion_norm", "anno")] %>%
     setnames(c("id", "dispersion_norm", "anno")) %>%
     setorder(-dispersion_norm) %>%
+    head(n = args$hvf) %>% .$id
+} else if (args$model == "normdispbetasign") {
+  hvfs <- fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, args$anno)) %>%
+    .[,c("Feature", "dispersion_norm_sign", "anno")] %>%
+    setnames(c("id", "dispersion_norm_sign", "anno")) %>%
+    setorder(-dispersion_norm_sign) %>%
     head(n = args$hvf) %>% .$id
 } else if (args$model == "random") {
   hvfs <- fit_dt[sample(NROW(fit_dt)),] %>% head(n = args$hvf) %>% .$id

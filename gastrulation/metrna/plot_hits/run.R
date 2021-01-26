@@ -8,6 +8,12 @@ io$data_dir <- "~/datasets/scMET_ms/gastrulation/data/"
 io$hits_dir <- "~/datasets/scMET_ms/gastrulation/metrna/hits/"
 io$out_dir <- "~/datasets/scMET_ms/gastrulation/metrna/analysis/examples/"
 
+##
+# Tests
+io$script.boxplot <- "test_boxplot_hits.R"
+io$out_dir <- "~/datasets/scMET_ms/gastrulation/metrna/analysis/test_examples/"
+
+
 #############
 ## Options ##
 #############

@@ -134,3 +134,24 @@ dev.off()
 ```
 
 
+
+## Difference in mean methylation vs difference in variability
+# MA plots
+```{r, fig.width=3, fig.height=2}
+set.seed(123)
+for (an in names(annot)) {
+  df[[an]]$diff_epsilon_summary$mu_overall <- df[[an]]$diff_epsilon_summary$mu_A - df[[an]]$diff_epsilon_summary$mu_B
+  gg <- scmet_plot_ma(diff_obj = df[[an]], task = "diff_epsilon", x = "mu", nfeatures = 800,
+                      ylab = expression(paste("Change in variability ( ", epsilon[exc] - epsilon[inh], " )")), 
+                      xlab = expression(paste("Change in mean methylation ", mu)), title = NULL) +
+    theme(legend.position = "top")
+  #if (an == "distal_H3K27ac_cortex") {
+  #  gg <- gg + theme(legend.position = "none")
+  #} else {
+  #  gg <- gg + 
+  print(gg)
+  pdf(sprintf("%s/ecker_diffvar_diffmu_%s.pdf", out_dir, an), width = 4, height = 4.2)
+  print(gg)
+  dev.off()
+}
+```
