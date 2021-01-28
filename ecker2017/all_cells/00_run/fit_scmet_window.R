@@ -26,7 +26,7 @@ message("Test mode: ", is_test)
 
 ################
 ## Model settings (mostly keeping default parameters)
-opts$min.cpgs <- 5  # Minimum # of CpGs per feature
+#opts$min.cpgs <- 5  # Minimum # of CpGs per feature
 
 opts$iter <- ifelse(use_mcmc, 2000, 50000)
 opts$algorithm <- ifelse(use_mcmc, "NUTS", "meanfield")

@@ -3,7 +3,7 @@
 # -N fit_bayes
 #$ -cwd
 #$ -l h_rt=50:00:00
-#$ -l h_vmem=50G
+#$ -l h_vmem=70G
 #$ -pe sharedmem 1
 #$ -R y
 
@@ -14,7 +14,7 @@ export PATH
 # Initialise the environment modules
 . /etc/profile.d/modules.sh
 
-module load igmm/apps/R/3.6.1
+module load igmm/apps/R/4.0.3
 module load phys/compilers/gcc/9.1.0
 
 # Run the program
@@ -23,5 +23,5 @@ echo ${OUTDIR}
 echo ${MCMC}
 echo ${CHR}
 echo ""
-my_command="Rscript fit_scmet.R --anno ${ANNO} --chr ${CHR} --outdir ${OUTDIR} ${MCMC}"
+my_command="Rscript fit_scmet_window.R --anno ${ANNO} --chr ${CHR} --outdir ${OUTDIR} ${MCMC}"
 eval $my_command
