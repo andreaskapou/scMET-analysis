@@ -1,5 +1,6 @@
 # Compute normalized dispersion values similar to scRNA-seq studies,
-# e.g. ....
+# as in Zheng et al. (2017), Massively parallel digital transcriptional
+#         profiling of single cells, Nature Communications.
 suppressPackageStartupMessages(library(plyr))
 suppressPackageStartupMessages(library(data.table))
 suppressPackageStartupMessages(library(tidyverse))
@@ -36,7 +37,7 @@ set.seed(123)
 source("../../load_settings.R")
 
 # annos: "distal_H3K27ac_cortex", "H3K4me1_cortex", "prom_2000_2000"
-anno <- "distal_H3K27ac_cortex"
+anno <- "prom_2000_2000"
 outdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
 is_test <- FALSE
 
@@ -50,21 +51,30 @@ if (is_test) {
   print("Test mode activated: subsetting features")
   Y <- Y[Feature %in% head(unique(Y$Feature), n = 200)]
 }
-# Calculate M value from Beta value (for now leave to Beta values)
+# Compute methylation rate
 Y <- Y %>%
-  .[, rate := met_reads / total_reads] %>%
-  #.[, m := log2((rate + 0.02) / (1 - rate + 0.02))] %>%
-  .[, m := rate] %>%
+  .[, m := met_reads / total_reads] %>%
   .[, c("Feature", "Cell", "m")]
 
-Y_mat <- dcast(Y, Feature ~ Cell, value.var = "m")
 # Convert to data.frame and make 1st column as rownames
+Y_mat <- dcast(Y, Feature ~ Cell, value.var = "m")
 Y_mat <- Y_mat %>% as.data.frame %>% remove_rownames %>%
   column_to_rownames(var = "Feature") %>% t
 
-# Compute normalized dispersion estimates
+# Compute normalized dispersion estimates as in Zheng et al. (2017)
 df <- .get_norm_dispersion(Y_mat)
 df$anno <- anno
+
+##########
+## Save ##
+cat("Storing results ...\n")
+if (!dir.exists(outdir)) { dir.create(outdir, recursive = TRUE) }
+fwrite(df, sprintf("%s/%s_normdisp.txt.gz", outdir, anno), sep = "\t")
+cat("Finished!!\n")
+
+
+###########
+## Tests ##
 
 # tt <- df[rownames(df) %in% c("distal_H3K27ac_cortex_11725", "distal_H3K27ac_cortex_13166",
 #                              "distal_H3K27ac_cortex_28573", "distal_H3K27ac_cortex_1480",
@@ -104,10 +114,3 @@ df$anno <- anno
 #     strip.text = element_text(colour = "black", size = rel(1.2)),
 #     legend.position = "none"
 #   )
-
-##########
-## Save ##
-cat("Storing results ...\n")
-if (!dir.exists(outdir)) { dir.create(outdir, recursive = TRUE) }
-fwrite(df, sprintf("%s/%s_norm_dispersion_beta.txt.gz", outdir, anno), sep = "\t")
-cat("Finished!!\n")

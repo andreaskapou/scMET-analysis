@@ -181,3 +181,89 @@ pdf(sprintf("%s/feature_lengths_vs_diff.pdf", out_dir), width = 9, height = 7)
 print(tmp)
 dev.off()
 ```
+
+
+
+# Relationship of feature length and CpGs with normalised dispersion estimates
+```{r}
+datadir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
+disp_dt <- anno_id %>%
+  map(~ fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", datadir, .))) %>%
+  rbindlist %>%
+  setnames(c("Feature"), c("id"))
+```
+
+## Merge data
+```{r}
+disp_merged <- merge(disp_dt, anno_dt, by = c("anno", "id"))
+```
+
+
+## Plots
+```{r, fig.height=3, fig.width=3}
+set.seed(1234)
+gg_list <- list()
+for (an in anno_id) {
+  title <- ifelse(an == "distal_H3K27ac_cortex", "Distal H3K27ac", "H3K4me1") 
+  #df <- df_merged[anno == an] %>% .[sample(x = NROW(df_merged), size = 8000), ] 
+  df <- disp_merged[anno == an]
+  gg1 <- ggplot(df, aes(x = log(length), y = dispersion_norm_sign)) +
+    geom_hex(bins = 70) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Normalised dispersion") +
+    ggtitle(title) +
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(xlim = c(0, 2500)) +
+    theme_classic() 
+  gg2 <- ggplot(df, aes(x = log(length), y = cv)) +
+    geom_hex(bins = 50) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Coefficient of variation") + 
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(ylim = c(-2.8, 2.5)) +
+    theme_classic()
+  
+  gg_list[[an]] <- cowplot::plot_grid(gg1, gg2, ncol = 2)
+}
+
+library(patchwork)
+tmp <- (gg_list[[1]]/gg_list[[2]]) + plot_annotation(tag_levels = 'a')
+pdf(sprintf("%s/norm_disp_feature_lengths_vs_estimates.pdf", out_dir), width = 9, height = 7)
+print(tmp)
+dev.off()
+```
+
+## Correlation with CpG coverage
+```{r}
+set.seed(1234)
+gg_list <- list()
+for (an in anno_id) {
+  title <- ifelse(an == "distal_H3K27ac_cortex", "Distal H3K27ac", "H3K4me1") 
+  #df <- df_merged[anno == an] %>% .[sample(x = NROW(df_merged), size = 8000), ] 
+  df <- Y[[an]]
+  df <- df %>% .[, .(cpgs = mean(total_reads)), by = .(Feature)] %>%
+    setnames(c("id", "cpgs"))
+  df <- merge(df, disp_merged, by = c("id"))
+  
+  gg1 <- ggplot(df, aes(x = log(cpgs), y = dispersion_norm_sign)) +
+    geom_hex(bins = 70) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Number of CpGs") + ylab("Normalised dispersion") +
+    ggtitle(title) +
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(xlim = c(0, 2500)) +
+    theme_classic() 
+  gg_list[[an]] <- gg1
+}
+
+library(patchwork)
+tmp <- (gg_list[[1]] | gg_list[[2]]) + plot_annotation(tag_levels = 'a')
+pdf(sprintf("%s/norm_disp_cpgs_vs_estimates.pdf", out_dir), width = 9, height = 4)
+print(tmp)
+dev.off()
+```
+
+
