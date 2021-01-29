@@ -17,11 +17,10 @@ opts$anno <- c(
 
 # Define which model to fit
 opts$models <- c(
-  #"scmet",
-  #"binomial",
-  #"gaussian",
-  #"normdispbeta",
-  #"normdispbetasign"
+  "scmet",
+  "binomial",
+  "gaussian",
+  "normdisp",
   "random"
 )
 
