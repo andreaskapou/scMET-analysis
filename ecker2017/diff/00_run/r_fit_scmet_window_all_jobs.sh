@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Run the program
-declare -a annos=("window10000_step10000") #("window10000_step10000")
+declare -a annos=("window10000_step10000")
                   #"window20000_step20000")
 # get length of annos
 annoslength=${#annos[@]}
@@ -13,12 +13,12 @@ chrslength=${#chrs[@]}
 
 # get groups
 declare -a groups=("Inhibitory")
+                  #"Excitatory")
 groupslength=${#groups[@]}
 
 outdir="/exports/igmm/eddie/ckapoura-XDF/scMET_ms/ecker2017/diff/data/"
 useMCMC="" # to use MCMC set it to "--mcmc"
 logPath="logs/"
-i=0
 for (( i=0; i<${annoslength}; i++ )); do
   for (( k=0; k<${groupslength}; k++ )); do
     for (( j=0; j<${chrslength}; j++ )); do
