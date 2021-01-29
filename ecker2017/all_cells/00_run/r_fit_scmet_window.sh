@@ -2,8 +2,8 @@
 # Grid Engine options (lines prefixed with #$)
 # -N fit_bayes
 #$ -cwd
-#$ -l h_rt=50:00:00
-#$ -l h_vmem=70G
+#$ -l h_rt=45:00:00
+#$ -l h_vmem=60G
 #$ -pe sharedmem 1
 #$ -R y
 
