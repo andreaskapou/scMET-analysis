@@ -1,13 +1,12 @@
 #!/bin/sh
 
 # Run the program
-declare -a annos=("window10000_step10000") #("window10000_step10000")
+declare -a annos=("window20000_step20000") #("window10000_step10000")
                   #"window20000_step20000")
 # get length of annos
 annoslength=${#annos[@]}
 
-declare -a chrs=("chr1" "chr3" "chr4" "chr5" "chr6" "chr7" "chr8" "chr9") #, "chr7", "chr15", "chrX")
-declare -a chrs=("chr11" "chr12" "chr13" "chr14" "chr16" "chr17" "chr18" "chr19")
+declare -a chrs=("chr1" "chr3" "chr4" "chr5" "chr6" "chr7" "chr8" "chr9" "chr10" "chr11" "chr12" "chr13" "chr14" "chr16" "chr17" "chr18" "chr19")
 # get length of annos
 chrslength=${#chrs[@]}
 
