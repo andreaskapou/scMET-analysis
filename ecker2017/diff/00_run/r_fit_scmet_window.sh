@@ -2,9 +2,9 @@
 # Grid Engine options (lines prefixed with #$)
 # -N fit_bayes
 #$ -cwd
-#$ -l h_rt=50:00:00
-#$ -l h_vmem=50G
-#$ -pe sharedmem 1
+#$ -l h_rt=30:00:00
+#$ -l h_vmem=60G
+# -pe sharedmem 1
 #$ -R y
 
 # Initialise PATH to see local scripts
@@ -22,6 +22,7 @@ echo ${ANNO}
 echo ${GROUP}
 echo ${OUTDIR}
 echo ${MCMC}
+echo ${CHR}
 echo ""
-my_command="Rscript fit_scmet.R --anno ${ANNO} --group ${GROUP} --outdir ${OUTDIR} ${MCMC} "
+my_command="Rscript fit_scmet_window.R --anno ${ANNO} --group ${GROUP} --chr ${CHR} --outdir ${OUTDIR} ${MCMC}"
 eval $my_command
