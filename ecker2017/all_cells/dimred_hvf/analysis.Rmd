@@ -35,7 +35,7 @@ models <- c(
   "scmet",
   "binomial",
   "gaussian",
-  "normdispbetasign",
+  "normdisp",
   "random"
 )
 # Number of highly variable features
@@ -75,8 +75,8 @@ to.plot <- rbindlist(foo) %>%
   .[,value2 := frollmean(value, align = "right", n = 4), 
     by = c("anno","model","metric")] %>%
   .[is.na(value2),value2 := value]
-to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian", "normdispbetasign", "random"),
-                          labels = c("scMET", "Binomial", "Gaussian", "Dispersion norm", "Random"))
+to.plot$model <- factor(to.plot$model, levels = c("scmet", "binomial", "gaussian", "normdisp", "random"),
+                        labels = c("scMET", "Binomial", "Gaussian", "NormDisp", "Random"))
 ##########
 ## Plot ##
 ##########
@@ -96,16 +96,16 @@ for (i in names(metrics)) {
   theme_classic() +
   theme(
     #legend.position = c(0.92, 0.82), #"right",
-    legend.position = c(0.89, 0.8), #"right",
+    legend.position = c(0.92, 0.75), #"right",
     legend.margin = margin(t = -.1, r = 0, b = -0.2, l = 0, unit = "cm"),
     legend.title = element_blank(),
     strip.text = element_text(color = "black", size = rel(1.1)),
-    legend.text = element_text(color = "black", size = rel(1.15)),
+    legend.text = element_text(color = "black", size = rel(1.05)),
     axis.text = element_text(color = "black", size = rel(0.8)),
     axis.title = element_text(color = "black", size = rel(1.1))
   )
   print(p)
-  pdf(sprintf("%s/ecker_cluster_rev1_%s.pdf", out_dir, i), width = 8, height = 3.3)
+  pdf(sprintf("%s/ecker_cluster_%s.pdf", out_dir, i), width = 8, height = 3.3)
   print(p)
   dev.off()
 }

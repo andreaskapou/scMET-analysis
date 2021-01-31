@@ -11,75 +11,6 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, results = "hide")
-
-# Shrinkage plot for overdispersion parameter
-shrinkage_overdisp_plot <- function(res, x_lab = "True overdispersion"){
-  colors <- c("BB MLE" = "#999999", "scMET" = "#E69F00")
-  gg <- ggplot(res) +
-    geom_point(aes(y = gamma_mle, x = gamma_true, fill = "BB MLE"), 
-               shape = 21, size = 1.2, alpha = 0.5, stroke = 0.2) +
-    geom_point(aes(y = gamma_median, x = gamma_true, fill = "scMET"), 
-               shape = 21, size = 1.9, stroke = 0.2) +
-    geom_abline(intercept = 0, slope = 1, color = "black", 
-                linetype = "dashed", alpha = 0.7) +
-    geom_segment(aes(x = gamma_true, y = gamma_mle, 
-                     xend = gamma_true, yend = gamma_median),
-                     arrow = arrow(angle = 10, length = unit(0.06, "inches")), 
-                 size = 0.05, alpha = 0.3) +
-    facet_wrap(~cells, scales = "free_x", nrow = 1) +
-    labs(x = x_lab, y = "Estimated overdispersion", color = "Legend") +
-    scale_fill_manual(values = colors) +
-    theme_classic() +
-    theme(
-        legend.position = "top",
-        legend.title = element_blank(),
-        legend.margin = margin(-2, 0, -2, 0),
-        legend.box.margin = margin(-2, 0, -2, 0),
-        panel.spacing.x = unit(0.9, "lines"),
-        plot.tag = element_text(color = "black", face = "bold", size = rel(1.6)),
-        legend.text = element_text(color = "black", size = rel(1.1)),
-        strip.text = element_text(color = "black", size = rel(1.1)),
-        axis.text = element_text(color = "black", size = rel(0.8)),
-        axis.title = element_text(color = "black", size = rel(1.1))
-      )
-  return(gg)
-}
-
-
-# Shrinkage plot for mean parameter
-shrinkage_mean_plots <- function(res, x_lab = "True mean methylation"){
-  colors <- c("BB MLE" = "#999999", "scMET" = "#E69F00")
-  gg <- ggplot(res) +
-    geom_point(aes(y = mu_mle, x = mu_true, fill = "BB MLE"), 
-               shape = 21, size = 1.2, alpha = 0.5, stroke = 0.2) +
-    geom_point(aes(y = mu_median, x = mu_true, fill = "scMET"), 
-               shape = 21, size = 1.9, stroke = 0.2) +
-    geom_abline(intercept = 0, slope = 1, color = "black", 
-                linetype = "dashed", alpha = 0.7) +
-    geom_segment(aes(x = mu_true, y = mu_mle, 
-                     xend = mu_true, yend = mu_median),
-                     arrow = arrow(angle = 10, length = unit(0.06, "inches")), 
-                 size = 0.05, alpha = 0.3) +
-    facet_wrap(~cells, scales = "free_x", nrow = 1) +
-    labs(x = x_lab, y = "Estimated mean methylation", color = "Legend") +
-    scale_fill_manual(values = colors) +
-    # xlab("True overdispersion") + ylab("Estimated overdispersion") +
-    theme_classic() +
-    theme(
-        legend.position = "top", #c(0.87, 0.13), #"right",
-        legend.title = element_blank(),
-        legend.margin = margin(-2, 0, -2, 0),
-        legend.box.margin = margin(-2, 0, -2, 0),
-        panel.spacing.x = unit(1, "lines"),
-        plot.tag = element_text(color = "black", face = "bold", size = rel(1.6)),
-        legend.text = element_text(color = "black", size = rel(1.1)),
-        strip.text = element_text(color = "black", size = rel(1.1)),
-        axis.text = element_text(color = "black", size = rel(0.8)),
-        axis.title = element_text(color = "black", size = rel(1.1))
-      )
-  return(gg)
-}
-
 ```
 
 
@@ -126,7 +57,8 @@ compute_cpg <- function(x) {
 summary_stats <- data.table(cells = numeric(), features = numeric(), 
                             cpgs = numeric(), feature_name = character(), 
                             gamma_true = numeric(), gamma_median = numeric(), 
-                            gamma_sd = numeric(), mu_true = numeric(), 
+                            gamma_sd = numeric(), epsilon_median = numeric(), 
+                            epsilon_sd = numeric(), mu_true = numeric(), 
                             mu_median = numeric(), mu_sd = numeric(),
                             gamma_mle = numeric(), mu_mle = numeric(), 
                             cpg_cov = numeric(), cpg_bin = character())
@@ -151,6 +83,9 @@ for (r in opts$rep) {
                      gamma_true = sim_dt$theta_true$gamma,
                      gamma_median = colMedians(fit_obj$posterior$gamma),
                      gamma_sd = apply(fit_obj$posterior$gamma, 2, sd),
+                     # epsilon
+                     epsilon_median = colMedians(fit_obj$posterior$epsilon),
+                     epsilon_sd = apply(fit_obj$posterior$epsilon, 2, sd),
                      # mu
                      mu_true = sim_dt$theta_true$mu,
                      mu_median = colMedians(fit_obj$posterior$mu),
@@ -171,172 +106,42 @@ rm(mle, fit_obj, sim_dt, dt, cpg, c, r)
 
 
 ```{r}
-tmp <- copy(summary_stats)
-tmp <- tmp[, cpgs := compute_cpg(cpg_cov)]
+tmp <- copy(summary_stats) %>% .[, cpg_cov_round := round(cpg_cov)] %>%
+  .[, c("cells", "cpg_cov_round", "epsilon_sd", "gamma_sd")] %>%
+  setnames(c("Cells", "CpGs", "epsilon_sd", "gamma_sd"))
+tmp$Cells <- factor(tmp$Cells, levels = unique(tmp$Cells), 
+                        labels = paste(unique(tmp$Cells), "cells"))
+# tmp2 <- tmp[, mean(epsilon_sd > 0.45), by = c("cpg_cov_round", "cells")] %>%
+#   setorder(cells, cpg_cov_round)
 ```
 
 
-# Overdispersion shrinkage as we increase cells
+# Correlation between uncertainty in posterior estimates and CpGs as we increase cells
 ```{r, fig.width=5, fig.height=3.5}
-tmp <- copy(summary_stats)
-tmp$cells <- factor(tmp$cells, levels = unique(tmp$cells), 
-                        labels = paste(unique(tmp$cells), "cells"))
-#tmp$gamma_median[tmp$gamma_median > 0.6] <- 0.58
-#tmp$gamma_mle[tmp$gamma_mle > 0.6] <- 0.58
-gg_overdisp <- list()
-iter <- 1
-for (cpg in opts$N_cpgs) {
-  dt <- tmp[features == opts$N_feat & cpgs == cpg]
-  dt <- dt %>% split(., by = "cells") %>%
-    map(~ .[sample(150)]) %>%
-    rbindlist
-  if (cpg == 15) {
-    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG poor)")
-  } else {
-    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG rich)") +
-            theme(legend.position = "none")
-  }
-  iter <- iter + 1
-}
-print(cowplot::plot_grid(plotlist = gg_overdisp, nrow = 2, 
-                         labels = c("a", "b"), label_size = 18))
-```
-
-## Mean methylation shrinkage as we increase cells
-```{r, fig.width=5, fig.height=3.5}
-tmp <- copy(summary_stats)
-tmp$cells <- factor(tmp$cells, levels = unique(tmp$cells), 
-                        labels = paste(unique(tmp$cells), "cells"))
-gg_mean <- list()
-iter <- 1
-for (cpg in opts$N_cpgs) {
-  dt <- tmp[features == opts$N_feat & cpgs == cpg]
-  dt <- dt %>% split(., by = "cells") %>%
-    map(~ .[sample(150)]) %>%
-    rbindlist
-  if (cpg == 15) {
-    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG poor)")
-  } else {
-    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG rich)") +
-            theme(legend.position = "none")
-  }
-  iter <- iter + 1
-}
-print(cowplot::plot_grid(plotlist = gg_mean, nrow = 2, 
-                         labels = c("a", "b"), label_size = 18))
-```
-
-
-# Model performance in predicting true values
-## Log odds ratio difference between infered and true values for $\gamma$.
-```{r, fig.width=2, fig.height=2.5}
-opts$val_thresh <- 1e-2
-tmp <- copy(summary_stats) %>% .[, c("features", "or_gamma", "cpg_cov") := NULL]
-to_plot <- tmp[, c("cells", "cpgs", "feature_name", "gamma_true", 
-                   "gamma_median", "gamma_mle")] %>%
-  .[, gamma_mle := ifelse(gamma_mle > opts$val_thresh & 
-                            gamma_mle < 1 - opts$val_thresh, gamma_mle, 
-                          ifelse(gamma_mle < opts$val_thresh, 
-                                 opts$val_thresh, 1 - opts$val_thresh))] %>%
-  .[, scmet_lor := abs(scMET:::.compute_log_odds_ratio(gamma_true, gamma_median))] %>%
-  .[, mle_lor := abs(scMET:::.compute_log_odds_ratio(gamma_true, gamma_mle))] %>%
-  .[, c("gamma_true", "gamma_median", "gamma_mle", "feature_name") := NULL] %>%
-  melt(id.vars = c("cells", "cpgs"))
-
-to_plot$cpgs <- factor(to_plot$cpgs, levels = c(15, 50), 
-                       labels = c("CpG poor", "CpG rich"))
-to_plot$variable <- factor(to_plot$variable, levels = c("mle_lor", "scmet_lor"), 
-                           labels = c("BB MLE", "scMET"))
-
-gg_overdisp_lor <- ggboxplot(to_plot, x = "cells", y = "value", 
-                             fill = "variable", lwd = 0.4, outlier.size = 0.5) +
-  facet_wrap(~cpgs, scales = "fixed", nrow = 2) +
-  scale_fill_manual(values = c( "#999999", "#E69F00", "#56B4E9")) +
-  labs(title = NULL, x = "Number of cells", 
-       y = expression(paste("LOR (", gamma[true], ", ", 
-                            gamma[estimated], ")")), fill = "Model") +
-  theme_classic() +
-  ylim(c(0, 2.2)) +
-  theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      legend.margin = margin(-2, 0, -2, 0),
-      legend.box.margin = margin(-2, 0, -2, 0),
-      panel.spacing.y = unit(3, "lines"),
-      plot.tag = element_text(color = "black", face = "bold", size = rel(1.6)),
-      legend.text = element_text(color = "black", size = rel(1.1)),
-      strip.text = element_text(color = "black", size = rel(1.1)),
-      axis.text = element_text(color = "black", size = rel(0.8)),
-      axis.title = element_text(color = "black", size = rel(1.1))
-    )
-print(gg_overdisp_lor)
-```
-
-
-## LORs between infered and true values for $\mu$.
-```{r, fig.width=2, fig.height=2.5}
-opts$val_thresh <- 1e-10
-tmp <- copy(summary_stats) %>% .[, c("features", "or_gamma", "cpg_cov") := NULL]
-to_plot <- tmp[, c("cells", "cpgs", "feature_name", 
-                   "mu_true", "mu_median", "mu_mle")] %>%
-  .[, mu_mle := ifelse(mu_mle > opts$val_thresh & 
-                         mu_mle < 1 - opts$val_thresh, mu_mle, 
-                       ifelse(mu_mle < opts$val_thresh, 
-                              opts$val_thresh, 1 - opts$val_thresh))] %>%
-  .[, mle_lor := abs(scMET:::.compute_log_odds_ratio(mu_true, mu_mle))] %>%
-  .[, scmet_lor := abs(scMET:::.compute_log_odds_ratio(mu_true, mu_median))] %>%
-  .[, c("mu_true", "mu_median", "mu_mle", "feature_name") := NULL] %>%
-  melt(id.vars = c("cells", "cpgs"))
-
-to_plot$cpgs <- factor(to_plot$cpgs, levels = c(15, 50), 
-                       labels = c("CpG poor", "CpG rich"))
-to_plot$variable <- factor(to_plot$variable, levels = c("mle_lor", "scmet_lor"), 
-                           labels = c("BB MLE", "scMET"))
-
-gg_mean_lor <- ggboxplot(to_plot, x = "cells", y = "value", 
-                         fill = "variable", lwd = 0.4, outlier.size = 0.5) +
-  facet_wrap(~cpgs, scales = "fixed", nrow = 2) +
-  scale_fill_manual(values = c( "#999999", "#E69F00", "#56B4E9")) +
-  labs(title = NULL, x = "Number of cells", 
-       y = expression(paste("LOR (", mu[true], ", ", 
-                            mu[estimated], ")")), fill = "Model") +
-  theme_classic() +
-  ylim(c(0, 2)) +
-  theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      legend.margin = margin(-2, 0, -2, 0),
-      legend.box.margin = margin(-2, 0, -2, 0),
-      panel.spacing.y = unit(3, "lines"),
-      plot.tag = element_text(color = "black", face = "bold", size = rel(1.6)),
-      legend.text = element_text(color = "black", size = rel(1.1)),
-      strip.text = element_text(color = "black", size = rel(1.1)),
-      axis.text = element_text(color = "black", size = rel(0.8)),
-      axis.title = element_text(color = "black", size = rel(1.1))
-    )
-print(gg_mean_lor)
-```
-
-
-# Final plots
-```{r, fig.width=5, fig.height=3}
-library(patchwork)
-gg_gamma <- ((gg_overdisp[[1]]/gg_overdisp[[2]]) | gg_overdisp_lor) + 
-  plot_layout(widths = c(3.7, 1.2), heights = c(1.08, 1)) +
-  plot_annotation(tag_levels = 'a')
-print(gg_gamma)
-
-pdf(file = paste0(out_dir, "shrinkage_overdisp.pdf"), width = 10, height = 6)
-print(gg_gamma)
-dev.off()
-
-gg_mu <- ((gg_mean[[1]]/gg_mean[[2]]) | gg_mean_lor) + 
-  plot_layout(widths = c(3.7, 1.2), , heights = c(1.08, 1)) +
-  plot_annotation(tag_levels = 'a')
-print(gg_mu)
-
-pdf(file = paste0(out_dir, "shrinkage_mean.pdf"), width = 10, height = 6)
-print(gg_mu)
+gg <- ggplot(tmp) +
+    geom_point(aes(y = epsilon_sd, x = CpGs, fill = "#E69F00"), 
+               shape = 21, size = 1.2, alpha = 1, stroke = 0.2) +
+    geom_abline(intercept = 0.5, slope = 0, color = "black", 
+                  linetype = "dashed", alpha = 0.7) +
+    facet_wrap(~Cells, scales = "free_x", nrow = 1) +
+    labs(x = "Number of CpGs", 
+         y = expression(paste("Std of posterior estimates ", epsilon))) +
+    theme_classic() +
+    scale_fill_manual(values = "#E69F00") +
+    theme(
+        legend.position = "none",
+        legend.title = element_blank(),
+        legend.margin = margin(-2, 0, -2, 0),
+        legend.box.margin = margin(-2, 0, -2, 0),
+        panel.spacing.x = unit(0.9, "lines"),
+        plot.tag = element_text(color = "black", face = "bold", size = rel(1.6)),
+        legend.text = element_text(color = "black", size = rel(1.1)),
+        strip.text = element_text(color = "black", size = rel(1.1)),
+        axis.text = element_text(color = "black", size = rel(0.8)),
+        axis.title = element_text(color = "black", size = rel(1.1))
+      )
+gg
+pdf(sprintf("%s/robustness_estimates.pdf", out_dir), width = 6, height = 4)
+print(gg)
 dev.off()
 ```
-

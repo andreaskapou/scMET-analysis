@@ -1,0 +1,274 @@
+---
+title: "scMET scalability on running windows"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ggpubr))
+
+## I/O
+source("../load_settings.R")
+out_dir <- "~/datasets/scMET_ms/ecker2017/scalability/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+```
+
+# Running times
+Taken from logs of scMET. Should automate this, for now adding running times, manually.
+```{r}
+# In hours
+size_1k_all_cells <- c(30, 33, 23, 30, 31, 29, 32, 27, 28, 24, 33, 24, 28, 21, 18, 19, 23, 23, 13, 8)
+size_2k_all_cells <- c(31, 32, 24, 25, 27, 32, 32, 28, 24, 27, 31, 20, 30, 21, 19, 18, 16, 21, 12, 10)
+```
+
+
+# Load methylation data
+```{r}
+####################################
+## Load / filter methylation data ##
+Y <- list()
+for (i in anno_id){
+Y[[i]] <- read_filter_ecker_data(filename = sprintf("%s/%s.tsv.gz", io$data_parsed, i),
+                                 opts = opts, is_differential = FALSE)
+}
+feat_names <- lapply(Y, function(x) unique(x$Feature))
+```
+
+## Read and keep annotation feature information
+```{r}
+anno_dt <- list()
+for (i in 1:length(anno_id)) {
+  anno_dt[[i]] <- fread(paste0(anno_id[i], ".bed.gz")) %>%
+    .[, c(2, 3, 5)] %>% setnames(c("start", "end", "id")) %>%
+    .[id %in% feat_names[[anno_id[i]]]] %>% .[, length := (end - start)] %>%
+    .[, anno_name := anno_name[i]] %>%
+    .[, anno := anno_id[i]]
+}
+anno_dt <- rbindlist(anno_dt)
+```
+
+## Plot annotation feature length distribution
+```{r}
+pdf(sprintf("%s/feature_lengths.pdf", out_dir), width = 7, height = 4)
+ggboxplot(anno_dt, x =  "anno_name", y = "length", ylab = "Feature length", 
+          xlab = "", fill = "cornflowerblue") +
+  coord_cartesian(ylim = c(0, 2500))
+dev.off()
+```
+
+
+# Relationship of feature length with HVF/ mean methylation and overdispersion
+```{r}
+hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/hits/"
+hvf_dt <- anno_id %>%
+  map(~ fread(sprintf("%s/hvf_%s_epsilon.txt.gz", hvfdir, .))) %>%
+  rbindlist
+```
+
+## Merge data
+```{r}
+hvf_merged <- merge(hvf_dt, anno_dt, by = c("anno", "id"))
+```
+
+
+## Plots
+```{r, fig.height=3, fig.width=3}
+set.seed(1234)
+gg_list <- list()
+for (an in anno_id) {
+  title <- ifelse(an == "distal_H3K27ac_cortex", "Distal H3K27ac", "H3K4me1") 
+  #df <- df_merged[anno == an] %>% .[sample(x = NROW(df_merged), size = 8000), ] 
+  df <- hvf_merged[anno == an]
+  gg1 <- ggplot(df, aes(x = log(length), y = mu)) +
+    geom_hex(bins = 70) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Mean methylation") +
+    ggtitle(title) +
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(xlim = c(0, 2500)) +
+    theme_classic() 
+  gg2 <- ggplot(df, aes(x = log(length), y = epsilon)) +
+    geom_hex(bins = 50) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Residual Overdispersion") + 
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    coord_cartesian(ylim = c(-2.8, 2.5)) +
+    theme_classic()
+  
+  gg3 <- ggplot(df, aes(x = log(length), y = tail_prob)) +
+    geom_hex(bins = 50) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("HVF posterior tail probability") + 
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    theme_classic()
+  
+  gg_list[[an]] <- cowplot::plot_grid(gg1, gg2, gg3, ncol = 3)
+}
+
+library(patchwork)
+tmp <- (gg_list[[1]]/gg_list[[2]]) + plot_annotation(tag_levels = 'a')
+pdf(sprintf("%s/feature_lengths_vs_estimates.pdf", out_dir), width = 14, height = 7)
+print(tmp)
+dev.off()
+```
+
+
+
+# Relationship of feature length with DE analysis
+```{r}
+diffdir <- "~/datasets/scMET_ms/ecker2017/diff/hits/"
+diff_dt <- list() 
+for (an in anno_id) {
+  diff_dt[[an]] <- readRDS(sprintf("%s/%s_vb.rds", diffdir, an))
+}
+```
+
+## Merge data
+```{r}
+for (an in anno_id) {
+  diff_dt[[an]]$diff_mu_summary <- merge(diff_dt[[an]]$diff_mu_summary, 
+                                         anno_dt, by.x = c("feature_name"), by.y = "id")
+  diff_dt[[an]]$diff_epsilon_summary <- merge(diff_dt[[an]]$diff_epsilon_summary, 
+                                         anno_dt, by.x = c("feature_name"), by.y = "id")
+  diff_dt[[an]]$diff_gamma_summary <- merge(diff_dt[[an]]$diff_gamma_summary, 
+                                         anno_dt, by.x = c("feature_name"), by.y = "id")
+}
+```
+
+
+## Plots
+```{r, fig.height=3, fig.width=3}
+set.seed(1234)
+gg_list <- list()
+for (an in anno_id) {
+  title <- ifelse(an == "distal_H3K27ac_cortex", "Distal H3K27ac", "H3K4me1") 
+  gg1 <- ggplot(as.data.frame(diff_dt[[an]]$diff_mu_summary), 
+                aes(x = log(length.y), y = mu_LOR)) +
+    geom_hex(bins = 70) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("LOR (mean methylation)") +
+    ggtitle(title) +
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(xlim = c(0, 2500)) +
+    theme_classic() 
+  gg2 <- ggplot(as.data.frame(diff_dt[[an]]$diff_epsilon_summary), 
+                aes(x = log(length), y = epsilon_change)) +
+    geom_hex(bins = 50) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Change in residual overdispersion") + 
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    coord_cartesian(ylim = c(-2.8, 2.5)) +
+    theme_classic()
+  
+  gg_list[[an]] <- cowplot::plot_grid(gg1, gg2, ncol = 2)
+}
+
+library(patchwork)
+tmp <- (gg_list[[1]]/gg_list[[2]]) + plot_annotation(tag_levels = 'a')
+pdf(sprintf("%s/feature_lengths_vs_diff.pdf", out_dir), width = 9, height = 7)
+print(tmp)
+dev.off()
+```
+
+
+
+# Relationship of feature length and CpGs with normalised dispersion estimates
+```{r}
+datadir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
+disp_dt <- anno_id %>%
+  map(~ fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", datadir, .))) %>%
+  rbindlist %>%
+  setnames(c("Feature"), c("id"))
+```
+
+## Merge data
+```{r}
+disp_merged <- merge(disp_dt, anno_dt, by = c("anno", "id"))
+```
+
+
+## Plots
+```{r, fig.height=3, fig.width=3}
+set.seed(1234)
+gg_list <- list()
+for (an in anno_id) {
+  title <- ifelse(an == "distal_H3K27ac_cortex", "Distal H3K27ac", "H3K4me1") 
+  #df <- df_merged[anno == an] %>% .[sample(x = NROW(df_merged), size = 8000), ] 
+  df <- disp_merged[anno == an]
+  gg1 <- ggplot(df, aes(x = log(length), y = dispersion_norm_sign)) +
+    geom_hex(bins = 70) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Normalised dispersion") +
+    ggtitle(title) +
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(xlim = c(0, 2500)) +
+    theme_classic() 
+  gg2 <- ggplot(df, aes(x = log(length), y = cv)) +
+    geom_hex(bins = 50) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Log feature length") + ylab("Coefficient of variation") + 
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(ylim = c(-2.8, 2.5)) +
+    theme_classic()
+  
+  gg_list[[an]] <- cowplot::plot_grid(gg1, gg2, ncol = 2)
+}
+
+library(patchwork)
+tmp <- (gg_list[[1]]/gg_list[[2]]) + plot_annotation(tag_levels = 'a')
+pdf(sprintf("%s/norm_disp_feature_lengths_vs_estimates.pdf", out_dir), width = 9, height = 7)
+print(tmp)
+dev.off()
+```
+
+## Correlation with CpG coverage
+```{r}
+set.seed(1234)
+gg_list <- list()
+for (an in anno_id) {
+  title <- ifelse(an == "distal_H3K27ac_cortex", "Distal H3K27ac", "H3K4me1") 
+  #df <- df_merged[anno == an] %>% .[sample(x = NROW(df_merged), size = 8000), ] 
+  df <- Y[[an]]
+  df <- df %>% .[, .(cpgs = mean(total_reads)), by = .(Feature)] %>%
+    setnames(c("id", "cpgs"))
+  df <- merge(df, disp_merged, by = c("id"))
+  
+  gg1 <- ggplot(df, aes(x = log(cpgs), y = dispersion_norm_sign)) +
+    geom_hex(bins = 70) +
+    #geom_point(size = 1, shape = 21, stroke = 0.2, fill = "#E69F00") + 
+    xlab("Number of CpGs") + ylab("Normalised dispersion") +
+    ggtitle(title) +
+    viridis::scale_fill_viridis() +
+    viridis::scale_color_viridis() +
+    #coord_cartesian(xlim = c(0, 2500)) +
+    theme_classic() 
+  gg_list[[an]] <- gg1
+}
+
+library(patchwork)
+tmp <- (gg_list[[1]] | gg_list[[2]]) + plot_annotation(tag_levels = 'a')
+pdf(sprintf("%s/norm_disp_cpgs_vs_estimates.pdf", out_dir), width = 9, height = 4)
+print(tmp)
+dev.off()
+```
+
+

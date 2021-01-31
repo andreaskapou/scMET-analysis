@@ -37,7 +37,7 @@ set.seed(123)
 source("../../load_settings.R")
 
 # annos: "distal_H3K27ac_cortex", "H3K4me1_cortex", "prom_2000_2000"
-anno <- "prom_2000_2000"
+anno <- "distal_H3K27ac_cortex"
 outdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
 is_test <- FALSE
 
@@ -92,25 +92,81 @@ cat("Finished!!\n")
 #
 #
 # Y_tmp <- copy(Y)
-# Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_11725", "distal_H3K27ac_cortex_13166",
-#                             "distal_H3K27ac_cortex_28573", "distal_H3K27ac_cortex_1480",
-#                             "distal_H3K27ac_cortex_24013", "distal_H3K27ac_cortex_25912"), ]
-#
-#
-# ggplot(Y_tmp, aes(x = Feature, y = m, fill = Feature)) +
+# Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_24869", "distal_H3K27ac_cortex_7927",
+#                             "distal_H3K27ac_cortex_18656"), ]
+# gg <- ggplot(Y_tmp, aes(x = Feature, y = m, fill = Feature)) +
 #   geom_jitter(size = 0.8, alpha = 0.6, width = 0.25) +
 #   geom_violin(alpha = 0.5) +
 #   #scale_fill_manual(values = opts$colors3) +
-#   labs(x = NULL, y = "Methylation", title = NULL) +
+#   labs(x = NULL, y = "Methylation", title = "Top three features called HVF by NormDisp") +
 #   theme_classic() +
 #   theme(
-#     plot.title = element_text(colour = "black", size = rel(0.7), hjust = 0.5),
+#     plot.title = element_text(colour = "black", size = rel(1.3), hjust = 0.5),
 #     axis.title.y = element_text(colour = "black", size = rel(1.1)),
 #     axis.title.x = element_text(colour = "black", size = rel(1.1)),
-#     axis.text.x = element_text(colour = "black", size = rel(1.0), angle=40, hjust = 1),
+#     axis.text.x = element_text(colour = "black", size = rel(0.7), angle=0, hjust = 0.5),
 #     #axis.text.x = element_text(colour="black", size=rel(1.0), angle=30, hjust=1),
 #     axis.text.y = element_text(colour = "black", size = rel(0.8)),
 #     axis.text = element_text(colour = "black", size = rel(1.0)),
 #     strip.text = element_text(colour = "black", size = rel(1.2)),
 #     legend.position = "none"
 #   )
+#
+# out_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/comparison/hits/"
+# if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+#
+# pdf(paste0(out_dir, "top_hvf_normdisp.pdf"), width = 8, height = 3)
+# print(gg)
+# dev.off()
+#
+#
+# Y_tmp <- copy(Y)
+# Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_9891", "distal_H3K27ac_cortex_6245",
+#                                     "distal_H3K27ac_cortex_24135", "distal_H3K27ac_cortex_6244"), ]
+# gg <- ggplot(Y_tmp, aes(x = Feature, y = m, fill = Feature)) +
+#   geom_jitter(size = 0.8, alpha = 0.6, width = 0.25) +
+#   geom_violin(alpha = 0.5) +
+#   #scale_fill_manual(values = opts$colors3) +
+#   labs(x = NULL, y = "Methylation", title = "scMET HVF features not called by NormDisp") +
+#   theme_classic() +
+#   theme(
+#     plot.title = element_text(colour = "black", size = rel(1.3), hjust = 0.5),
+#     axis.title.y = element_text(colour = "black", size = rel(1.1)),
+#     axis.title.x = element_text(colour = "black", size = rel(1.1)),
+#     axis.text.x = element_text(colour = "black", size = rel(0.7), angle=0, hjust = 0.5),
+#     #axis.text.x = element_text(colour="black", size=rel(1.0), angle=30, hjust=1),
+#     axis.text.y = element_text(colour = "black", size = rel(0.8)),
+#     axis.text = element_text(colour = "black", size = rel(1.0)),
+#     strip.text = element_text(colour = "black", size = rel(1.2)),
+#     legend.position = "none"
+#   )
+#
+# pdf(paste0(out_dir, "scmet_hvf_not_normdisp.pdf"), width = 8, height = 3)
+# print(gg)
+# dev.off()
+#
+#
+# Y_tmp <- copy(Y)
+# Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_15339", "distal_H3K27ac_cortex_9891",
+#                                     "distal_H3K27ac_cortex_26439"), ]
+# gg <- ggplot(Y_tmp, aes(x = Feature, y = m, fill = Feature)) +
+#   geom_jitter(size = 0.8, alpha = 0.6, width = 0.25) +
+#   geom_violin(alpha = 0.5) +
+#   #scale_fill_manual(values = opts$colors3) +
+#   labs(x = NULL, y = "Methylation", title = "Top three HVFs called by scMET") +
+#   theme_classic() +
+#   theme(
+#     plot.title = element_text(colour = "black", size = rel(1.3), hjust = 0.5),
+#     axis.title.y = element_text(colour = "black", size = rel(1.1)),
+#     axis.title.x = element_text(colour = "black", size = rel(1.1)),
+#     axis.text.x = element_text(colour = "black", size = rel(0.7), angle=0, hjust = 0.5),
+#     #axis.text.x = element_text(colour="black", size=rel(1.0), angle=30, hjust=1),
+#     axis.text.y = element_text(colour = "black", size = rel(0.8)),
+#     axis.text = element_text(colour = "black", size = rel(1.0)),
+#     strip.text = element_text(colour = "black", size = rel(1.2)),
+#     legend.position = "none"
+#   )
+#
+# pdf(paste0(out_dir, "top_hvf_scmet.pdf"), width = 8, height = 3)
+# print(gg)
+# dev.off()

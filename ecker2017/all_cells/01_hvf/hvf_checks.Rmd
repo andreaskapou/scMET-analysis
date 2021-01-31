@@ -24,10 +24,7 @@ source("../../load_settings.R")
 io$fitdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
 io$hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/hits/"
 io$outdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/comparison/"
-## Options
-# Perform HVF calling eithr using residual overdispersion (epsilon)
-# or overdispersion (gamma)
-mode <- "epsilon"
+
 # Define genomic contexts
 annos <- c(
   "prom_2000_2000",
@@ -63,19 +60,7 @@ get_hvf <- function(model = "scmet",  anno_id = "prom_2000_2000",
     hvf_hits <- fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, anno_id))
     hvfs <- hvf_hits %>% setorder(-tail_prob, -epsilon) %>% head(n = hvf) %>% .$id
   } else if (model == "normdisp") {
-    hvfs <- fread(sprintf("%s/%s_norm_dispersion.txt.gz", io$fitdir, anno_id)) %>%
-      .[,c("Feature", "dispersion_norm", "anno")] %>%
-      setnames(c("id", "dispersion_norm", "anno")) %>%
-      setorder(-dispersion_norm) %>%
-      head(n = hvf) %>% .$id
-  } else if (model == "normdispbeta") {
-    hvfs <- fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
-      .[,c("Feature", "dispersion_norm", "anno")] %>%
-      setnames(c("id", "dispersion_norm", "anno")) %>%
-      setorder(-dispersion_norm) %>%
-      head(n = hvf) %>% .$id
-  } else if (model == "normdispbetasign") {
-    hvfs <- fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
+    hvfs <- fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
       .[,c("Feature", "dispersion_norm_sign", "anno")] %>%
       setnames(c("id", "dispersion_norm_sign", "anno")) %>%
       setorder(-dispersion_norm_sign) %>%
@@ -94,7 +79,7 @@ hvfs_random <- get_hvf(model = "random", anno_id = anno_id, hvf = hvf, fit_dt = 
 hvfs_scmet <- get_hvf(model = "scmet", anno_id = anno_id, hvf = hvf, fit_dt = fit_dt, io = io)
 hvfs_gauss <- get_hvf(model = "gaussian", anno_id = anno_id, hvf = hvf, fit_dt = fit_dt, io = io)
 hvfs_bin <- get_hvf(model = "binomial", anno_id = anno_id, hvf = hvf, fit_dt = fit_dt, io = io)
-hvfs_disp <- get_hvf(model = "normdispbetasign", anno_id = anno_id, hvf = hvf, fit_dt = fit_dt, io = io)
+hvfs_disp <- get_hvf(model = "normdisp", anno_id = anno_id, hvf = hvf, fit_dt = fit_dt, io = io)
 ```
 
 
@@ -145,8 +130,6 @@ scatter_plot <- function(df, x = "mu", y = "gamma",
   return(gg)
 }
 
-
-
 gg1 <- scatter_plot(df = fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, anno_id)) %>%
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_scmet, is_hvf := TRUE], x = "mu", y = "gamma",
   main = "Coloured based on 'scMET HVFs'")
@@ -157,7 +140,7 @@ gg2 <- scatter_plot(df = fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, an
 
 gg3 <- scatter_plot(df = fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, anno_id)) %>%
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_disp, is_hvf := TRUE], x = "mu", y = "gamma",
-  main = "Coloured based on 'Dispersion norm HVFs'")
+  main = "Coloured based on 'NormDisp HVFs'")
 
 gg4 <- scatter_plot(df = fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, anno_id)) %>%
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_bin, is_hvf := TRUE], x = "mu", y = "gamma",
@@ -167,10 +150,12 @@ gg5 <- scatter_plot(df = fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, an
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_random, is_hvf := TRUE], x = "mu", y = "gamma",
   main = "Coloured based on 'Random HVFs'")
 
-png(sprintf("%s/scmet_hvf_hits_%s.png", io$outdir, anno_id), width = 1200, height = 600)
+png(sprintf("%s/scmet_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2300, height = 1000)
 cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
 dev.off()
 ```
+
+
 
 distal_H3K27ac_cortex_11725 distal_H3K27ac_cortex_13166  distal_H3K27ac_cortex_28573
 distal_H3K27ac_cortex_1480
@@ -189,7 +174,7 @@ gg2 <- scatter_plot(df = fit_dt %>% .[anno == anno_id, ] %>%
 gg3 <- scatter_plot(df = fit_dt %>% .[anno == anno_id, ] %>%
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_disp, is_hvf := TRUE], x = "mu", y = "gauss_var",
   y_lab = "Gaussian variance",
-  main = "Coloured based on 'Dispersion norm HVFs'")
+  main = "Coloured based on 'NormDisp HVFs'")
 
 gg4 <- scatter_plot(df = fit_dt %>% .[anno == anno_id, ] %>%
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_bin, is_hvf := TRUE], x = "mu", y = "gauss_var",
@@ -201,7 +186,7 @@ gg5 <- scatter_plot(df = fit_dt %>% .[anno == anno_id, ] %>%
   y_lab = "Gaussian variance",
   main = "Coloured based on 'Random HVFs'")
 
-png(sprintf("%s/gauss_hvf_hits_%s.png", io$outdir, anno_id), width = 1200, height = 600)
+png(sprintf("%s/gauss_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2300, height = 1000)
 cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
 dev.off()
 ```
@@ -210,27 +195,43 @@ dev.off()
 
 ## Plot based on Disperesion normalised
 ```{r}
-gg1 <- scatter_plot(df = fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
-  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_scmet, is_hvf := TRUE], x = "mean", y = "dispersion_norm",
-  y_lab = "Dispersion normalised", main = "Coloured based on 'scMET HVFs'")
+gg1 <- scatter_plot(df = fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
+  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_scmet, is_hvf := TRUE], x = "mean", y = "dispersion_norm_sign",
+  y_lab = "Normalised dispersion", main = "Coloured based on 'scMET HVFs'")
 
-gg2 <- scatter_plot(df = fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
-  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_gauss, is_hvf := TRUE], x = "mean", y = "dispersion_norm",
-  y_lab = "Dispersion normalised", main = "Coloured based on 'Gaussian HVFs'")
+gg2 <- scatter_plot(df = fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
+  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_gauss, is_hvf := TRUE], x = "mean", y = "dispersion_norm_sign",
+  y_lab = "Normalised dispersion", main = "Coloured based on 'Gaussian HVFs'")
 
-gg3 <- scatter_plot(df = fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
-  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_disp, is_hvf := TRUE], x = "mean", y = "dispersion_norm",
-  y_lab = "Dispersion normalised", main = "Coloured based on 'Dispersion norm HVFs'")
+gg3 <- scatter_plot(df = fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
+  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_disp, is_hvf := TRUE], x = "mean", y = "dispersion_norm_sign",
+  y_lab = "Normalised dispersion", main = "Coloured based on 'NormDisp HVFs'")
 
-gg4 <- scatter_plot(df = fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
-  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_bin, is_hvf := TRUE], x = "mean", y = "dispersion_norm",
-  y_lab = "Dispersion normalised", main = "Coloured based on 'Binomial HVFs'")
+gg4 <- scatter_plot(df = fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
+  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_bin, is_hvf := TRUE], x = "mean", y = "dispersion_norm_sign",
+  y_lab = "Normalised dispersion", main = "Coloured based on 'Binomial HVFs'")
 
-gg5 <- scatter_plot(df = fread(sprintf("%s/%s_norm_dispersion_beta.txt.gz", io$fitdir, anno_id)) %>%
-  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_random, is_hvf := TRUE], x = "mean", y = "dispersion_norm",
-  y_lab = "Dispersion normalised", main = "Coloured based on 'Random HVFs'")
+gg5 <- scatter_plot(df = fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
+  .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_random, is_hvf := TRUE], x = "mean", y = "dispersion_norm_sign",
+  y_lab = "Normalised dispersion", main = "Coloured based on 'Random HVFs'")
 
-png(sprintf("%s/disp_hvf_hits_%s.png", io$outdir, anno_id), width = 1200, height = 600)
+png(sprintf("%s/disp_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2300, height = 1000)
 cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
 dev.off()
 ```
+
+
+```{r}
+df_disp <- fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_id)) %>%
+  .[, is_hvf_disp := FALSE] %>% .[Feature %in% hvfs_disp, is_hvf_disp := TRUE] %>%
+  .[, is_hvf_scmet := FALSE] %>% .[Feature %in% hvfs_scmet, is_hvf_scmet := TRUE] %>%
+  .[, c("mean", "dispersion_norm_sign", "Feature", "is_hvf_disp", "is_hvf_scmet")] %>%
+  setorder(-dispersion_norm_sign)
+
+df_scmet <- fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, anno_id)) %>%
+  .[, is_hvf_disp := FALSE] %>% .[id %in% hvfs_disp, is_hvf_disp := TRUE] %>%
+  .[, is_hvf_scmet := FALSE] %>% .[id %in% hvfs_scmet, is_hvf_scmet := TRUE] %>%
+  .[, c("mu", "gamma", "epsilon", "id", "tail_prob", "is_hvf_disp", "is_hvf_scmet")] %>%
+  setorder(-tail_prob, -epsilon)
+```
+

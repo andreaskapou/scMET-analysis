@@ -164,9 +164,9 @@ for (cpg in opts$N_cpgs) {
     map(~ .[sample(150)]) %>%
     rbindlist
   if (cpg == 15) {
-    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG poor)")
+    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG poor, average 10 CpGs)")
   } else {
-    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG rich)") +
+    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG rich, average 30 CpGs)") +
             theme(legend.position = "none")
   }
   iter <- iter + 1
@@ -188,9 +188,9 @@ for (cpg in opts$N_cpgs) {
     map(~ .[sample(150)]) %>%
     rbindlist
   if (cpg == 15) {
-    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG poor)")
+    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG poor, average 10 CpGs)")
   } else {
-    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG rich)") +
+    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG rich, average 30 CpGs)") +
             theme(legend.position = "none")
   }
   iter <- iter + 1
