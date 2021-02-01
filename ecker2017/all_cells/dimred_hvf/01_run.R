@@ -15,6 +15,11 @@ opts$anno <- c(
   "H3K4me1_cortex"
 )
 
+# opts$anno <- c(
+#   "window10000_step10000"#,
+#   #"window20000_step20000"
+# )
+
 # Define which model to fit
 opts$models <- c(
   "scmet",
@@ -37,5 +42,5 @@ mclapply(X = opts$models, function(model) {
                      model, an, hvf, outprefix)
       system(cmd)
     }, mc.cores = 3)
-  }, mc.cores = 3)
-}, mc.cores = 3)
+  }, mc.cores = 1)
+}, mc.cores = 1)

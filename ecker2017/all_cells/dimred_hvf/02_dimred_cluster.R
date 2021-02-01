@@ -15,6 +15,7 @@ source("../../load_settings.R")
 
 io$fitdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
 io$hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/hits/"
+io$hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf_window/hits/"
 opts$min.counts <- 3  # Minimum # of CpGs per feature
 
 ######################
@@ -30,20 +31,30 @@ args <- p$parse_args(commandArgs(TRUE))
 ##############################
 ## Load pre-computed parameter estimates
 ##############################
-fit_dt <- args$anno %>%
-  purrr::map(~ fread(sprintf("%s/%s_vb.txt.gz", io$fitdir, .))) %>%
-  rbindlist %>% .[,c("mu_median","gamma_median","epsilon_median",
-                     "gauss_var", "binom_var", "Feature","anno")] %>%
-  setnames(c("mu", "gamma", "epsilon", "gauss_var", "binom_var", "id", "anno"))
+if(args$model != "scmet") {
+  fit_dt <- args$anno %>%
+    purrr::map(~ fread(sprintf("%s/%s_vb.txt.gz", io$fitdir, .))) %>%
+    rbindlist %>% .[,c("mu_median","gamma_median","epsilon_median",
+                       "gauss_var", "binom_var", "Feature","anno")] %>%
+    setnames(c("mu", "gamma", "epsilon", "gauss_var", "binom_var", "id", "anno"))
+}
 
 ###########################
 ## Load methylation data ##
 ###########################
-met_dt <- args$anno %>%
-  purrr::map(~ fread(sprintf("%s/%s.tsv.gz",io$data_parsed,.), showProgress = FALSE,
-              colClasses = c("character","character","factor","numeric","integer")) %>%
-  .[V1%in%sample_metadata$sample]
-) %>% rbindlist %>% setnames(c("sample","id","anno","rate","Ntotal"))
+if (!(args$anno %in% c("window10000_step10000", "window20000_step20000") )) {
+  met_dt <- args$anno %>%
+    purrr::map(~ fread(sprintf("%s/%s.tsv.gz",io$data_parsed,.), showProgress = FALSE,
+                colClasses = c("character","character","factor","numeric","integer")) %>%
+    .[V1%in%sample_metadata$sample]
+  ) %>% rbindlist %>% setnames(c("sample","id","anno","rate","Ntotal"))
+} else {
+  #met_dt <- met_dt[Ntotal >= opts$min.counts]
+  #hvf_hits <- fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, args$anno))
+  #met_dt <- met_dt[id %in% hvf_hits$id]
+  #saveRDS(met_dt, file = sprintf("%s/%s.rds",io$data_parsed, args$anno))
+  met_dt <- readRDS(file = sprintf("%s/%s.rds",io$data_parsed, args$anno))
+}
 # Filter features by number of CpGs
 met_dt <- met_dt[Ntotal >= opts$min.counts]
 
@@ -66,6 +77,7 @@ if (args$model == "binomial") {
 } else {
   stop("Wrong model specification")
 }
+
 met_dt <- met_dt[id %in% hvfs]
 
 ################

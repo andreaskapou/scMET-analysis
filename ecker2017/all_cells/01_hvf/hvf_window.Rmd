@@ -1,0 +1,56 @@
+---
+title: "Window based HVF calling on residual overdispersion"
+author: "C.A.Kapourani & R. Argelaguet"
+output: 
+  html_notebook:
+    df_print: paged
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+---
+
+# Load libraries and settings
+```{r}
+suppressPackageStartupMessages(library(scMET))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ggpubr))
+
+## I/O
+source("../../load_settings.R")
+data_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
+marker_genes_file <- "~/datasets/scMET_ms/ecker2017/metadata/ecker2017_marker_genes.csv"
+out_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf_window/"
+hits_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf_window/hits/"
+if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
+if (!dir.exists(hits_dir)) { dir.create(hits_dir, recursive = FALSE) }
+
+## Options
+chr <- paste0("chr", c(seq(1, 19), "X"))
+# Define genomic contexts
+annot <- list(
+  c("window10000_step10000" = "Window 1kb"),
+  c("window20000_step20000" = "Window 2kb")
+)
+```
+
+
+# HVF analysis
+Load HVF results from each chromosome and combine them together. From the mean-overdispersion plots we observe the same pattern across chromosomes, hence we just combine the HVF results and sort by variability.
+```{r}
+hvf_summary <- list()
+for (i in 1:length(annot)) {
+  chr_summary <- list()
+  for (c in chr) {
+    chr_summary[[c]] <- fread(sprintf("%s/hvf_%s_%s_%s.txt.gz", 
+                                      hits_dir, names(annot[[i]]), c, mode))
+  }
+  hvf_summary[[i]] <- rbindlist(chr_summary) %>% setorder(-tail_prob, -epsilon)
+  fwrite(hvf_summary[[i]], 
+         file = sprintf("%s/hvf_%s_%s.txt.gz", hits_dir, names(annot[[i]]), mode))
+}
+```
+
