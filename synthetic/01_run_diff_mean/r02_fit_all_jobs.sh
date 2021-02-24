@@ -2,7 +2,7 @@
 
 # Run the program
 cellArray=( 20 50 100 200 500)
-cpgs=(15 50)
+cpgs=8 #(15 50)
 orMu=( 2 3 5 )
 useMCMC="" # to use MCMC set it to "--mcmc"
 logPath=" logs/"
