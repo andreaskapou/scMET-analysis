@@ -25,7 +25,7 @@ w_gamma <- c(-1.2, -.3, 1.1, -.9)
 s_gamma <- 0.25
 L <- 4
 diff_feat_prcg_gamma <- 0.15
-OR_change_gamma <- c(2)#, 3, 5)
+OR_change_gamma <- c(3, 5)
 N_feat <- 300
 N_cpgs <- c(8)
 N_cells <- c(20, 50, 100, 200, 500)#, 1000)
