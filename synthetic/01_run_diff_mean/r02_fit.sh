@@ -14,7 +14,7 @@ export PATH
 # Initialise the environment modules
 . /etc/profile.d/modules.sh
 
-module load igmm/apps/R/3.6.1
+module load igmm/apps/R/4.0.3
 module load phys/compilers/gcc/9.1.0
 
 # Run the program

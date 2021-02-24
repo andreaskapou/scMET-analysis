@@ -100,7 +100,7 @@ if (!dir.exists(out_dir)) {dir.create(out_dir, recursive = TRUE)}
 opts <- list()
 opts$N_feat <- 300
 opts$N_cells <- c(20, 50, 200)
-opts$N_cpgs <- c(15, 50)
+opts$N_cpgs <- c(8, 15, 50)
 opts$OR_change_gamma <- 2
 ```
 
@@ -150,7 +150,7 @@ rm(mle, fit_obj, sim_dt, dt, f, cpg, c, or)
 
 
 # Overdispersion shrinkage as we increase cells
-```{r, fig.width=5, fig.height=3.5}
+```{r, fig.width=5, fig.height=4.5}
 tmp <- copy(summary_stats)
 tmp$cells <- factor(tmp$cells, levels = unique(tmp$cells), 
                         labels = paste(unique(tmp$cells), "cells"))
@@ -163,20 +163,22 @@ for (cpg in opts$N_cpgs) {
   dt <- dt %>% split(., by = "cells") %>%
     map(~ .[sample(150)]) %>%
     rbindlist
-  if (cpg == 15) {
-    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG poor, average 10 CpGs)")
+  if (cpg == 8) {
+    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG poor, average 5 CpGs)")
+  }else if (cpg == 15) {
+    gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG moderate, average 10 CpGs)")
   } else {
     gg_overdisp[[iter]] <- shrinkage_overdisp_plot(dt, x_lab = "True overdispersion (CpG rich, average 30 CpGs)") +
             theme(legend.position = "none")
   }
   iter <- iter + 1
 }
-print(cowplot::plot_grid(plotlist = gg_overdisp, nrow = 2, 
-                         labels = c("a", "b"), label_size = 18))
+print(cowplot::plot_grid(plotlist = gg_overdisp, nrow = 3, 
+                         labels = c("a", "b", "c"), label_size = 18))
 ```
 
 ## Mean methylation shrinkage as we increase cells
-```{r, fig.width=5, fig.height=3.5}
+```{r, fig.width=5, fig.height=4.5}
 tmp <- copy(summary_stats)
 tmp$cells <- factor(tmp$cells, levels = unique(tmp$cells), 
                         labels = paste(unique(tmp$cells), "cells"))
@@ -187,22 +189,24 @@ for (cpg in opts$N_cpgs) {
   dt <- dt %>% split(., by = "cells") %>%
     map(~ .[sample(150)]) %>%
     rbindlist
-  if (cpg == 15) {
-    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG poor, average 10 CpGs)")
+  if (cpg == 8) {
+    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG poor, average 5 CpGs)")
+  }else if (cpg == 15) {
+    gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG moderate, average 10 CpGs)")
   } else {
     gg_mean[[iter]] <- shrinkage_mean_plots(dt, x_lab = "True mean methylation (CpG rich, average 30 CpGs)") +
             theme(legend.position = "none")
   }
   iter <- iter + 1
 }
-print(cowplot::plot_grid(plotlist = gg_mean, nrow = 2, 
-                         labels = c("a", "b"), label_size = 18))
+print(cowplot::plot_grid(plotlist = gg_mean, nrow = 3, 
+                         labels = c("a", "b", "c"), label_size = 18))
 ```
 
 
 # Model performance in predicting true values
 ## Log odds ratio difference between infered and true values for $\gamma$.
-```{r, fig.width=2, fig.height=2.5}
+```{r, fig.width=2, fig.height=3.5}
 opts$val_thresh <- 1e-2
 tmp <- copy(summary_stats) %>% .[, c("features", "or_gamma", "cpg_cov") := NULL]
 to_plot <- tmp[, c("cells", "cpgs", "feature_name", "gamma_true", 
@@ -216,20 +220,20 @@ to_plot <- tmp[, c("cells", "cpgs", "feature_name", "gamma_true",
   .[, c("gamma_true", "gamma_median", "gamma_mle", "feature_name") := NULL] %>%
   melt(id.vars = c("cells", "cpgs"))
 
-to_plot$cpgs <- factor(to_plot$cpgs, levels = c(15, 50), 
-                       labels = c("CpG poor", "CpG rich"))
+to_plot$cpgs <- factor(to_plot$cpgs, levels = c(8, 15, 50), 
+                       labels = c("CpG poor", "CpG moderate", "CpG rich"))
 to_plot$variable <- factor(to_plot$variable, levels = c("mle_lor", "scmet_lor"), 
                            labels = c("BB MLE", "scMET"))
 
 gg_overdisp_lor <- ggboxplot(to_plot, x = "cells", y = "value", 
                              fill = "variable", lwd = 0.4, outlier.size = 0.5) +
-  facet_wrap(~cpgs, scales = "fixed", nrow = 2) +
+  facet_wrap(~cpgs, scales = "fixed", nrow = 3) +
   scale_fill_manual(values = c( "#999999", "#E69F00", "#56B4E9")) +
   labs(title = NULL, x = "Number of cells", 
        y = expression(paste("LOR (", gamma[true], ", ", 
                             gamma[estimated], ")")), fill = "Model") +
   theme_classic() +
-  ylim(c(0, 2.2)) +
+  ylim(c(0, 1.8)) +
   theme(
       legend.position = "top",
       legend.title = element_blank(),
@@ -247,7 +251,7 @@ print(gg_overdisp_lor)
 
 
 ## LORs between infered and true values for $\mu$.
-```{r, fig.width=2, fig.height=2.5}
+```{r, fig.width=2, fig.height=3.5}
 opts$val_thresh <- 1e-10
 tmp <- copy(summary_stats) %>% .[, c("features", "or_gamma", "cpg_cov") := NULL]
 to_plot <- tmp[, c("cells", "cpgs", "feature_name", 
@@ -261,20 +265,20 @@ to_plot <- tmp[, c("cells", "cpgs", "feature_name",
   .[, c("mu_true", "mu_median", "mu_mle", "feature_name") := NULL] %>%
   melt(id.vars = c("cells", "cpgs"))
 
-to_plot$cpgs <- factor(to_plot$cpgs, levels = c(15, 50), 
-                       labels = c("CpG poor", "CpG rich"))
+to_plot$cpgs <- factor(to_plot$cpgs, levels = c(8, 15, 50), 
+                       labels = c("CpG poor", "CpG moderate", "CpG rich"))
 to_plot$variable <- factor(to_plot$variable, levels = c("mle_lor", "scmet_lor"), 
                            labels = c("BB MLE", "scMET"))
 
 gg_mean_lor <- ggboxplot(to_plot, x = "cells", y = "value", 
                          fill = "variable", lwd = 0.4, outlier.size = 0.5) +
-  facet_wrap(~cpgs, scales = "fixed", nrow = 2) +
+  facet_wrap(~cpgs, scales = "fixed", nrow = 3) +
   scale_fill_manual(values = c( "#999999", "#E69F00", "#56B4E9")) +
   labs(title = NULL, x = "Number of cells", 
        y = expression(paste("LOR (", mu[true], ", ", 
                             mu[estimated], ")")), fill = "Model") +
   theme_classic() +
-  ylim(c(0, 2)) +
+  ylim(c(0, 1.8)) +
   theme(
       legend.position = "top",
       legend.title = element_blank(),
@@ -292,23 +296,23 @@ print(gg_mean_lor)
 
 
 # Final plots
-```{r, fig.width=5, fig.height=3}
+```{r, fig.width=5, fig.height=4}
 library(patchwork)
-gg_gamma <- ((gg_overdisp[[1]]/gg_overdisp[[2]]) | gg_overdisp_lor) + 
+gg_gamma <- ((gg_overdisp[[1]]/gg_overdisp[[2]]/gg_overdisp[[3]]) | gg_overdisp_lor) + 
   plot_layout(widths = c(3.7, 1.2), heights = c(1.08, 1)) +
   plot_annotation(tag_levels = 'a')
 print(gg_gamma)
 
-pdf(file = paste0(out_dir, "shrinkage_overdisp.pdf"), width = 10, height = 6)
+pdf(file = paste0(out_dir, "shrinkage_overdisp.pdf"), width = 10, height = 9)
 print(gg_gamma)
 dev.off()
 
-gg_mu <- ((gg_mean[[1]]/gg_mean[[2]]) | gg_mean_lor) + 
+gg_mu <- ((gg_mean[[1]]/gg_mean[[2]]/gg_mean[[3]]) | gg_mean_lor) + 
   plot_layout(widths = c(3.7, 1.2), , heights = c(1.08, 1)) +
   plot_annotation(tag_levels = 'a')
 print(gg_mu)
 
-pdf(file = paste0(out_dir, "shrinkage_mean.pdf"), width = 10, height = 6)
+pdf(file = paste0(out_dir, "shrinkage_mean.pdf"), width = 10, height = 9)
 print(gg_mu)
 dev.off()
 ```

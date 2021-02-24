@@ -124,7 +124,7 @@ gg <- ggplot(tmp) +
     geom_abline(intercept = 0.5, slope = 0, color = "black", 
                   linetype = "dashed", alpha = 0.7) +
     facet_wrap(~Cells, scales = "free_x", nrow = 1) +
-    labs(x = "Number of CpGs", 
+    labs(x = "CpG coverage", 
          y = expression(paste("Std of posterior estimates ", epsilon))) +
     theme_classic() +
     scale_fill_manual(values = "#E69F00") +
