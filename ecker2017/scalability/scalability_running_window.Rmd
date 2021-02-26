@@ -33,9 +33,9 @@ size_10k_all_cells <- c(30, 33, 23, 30, 31, 29, 32, 27, 28, 24, 33, 24, 28, 21, 
 size_20k_all_cells <- c(31, 32, 24, 25, 27, 32, 32, 28, 24, 27, 31, 20, 30, 21, 19, 18, 16, 21, 12, 10)
 size_10k_inh       <- c(7, 5, 4, 6, 5, 5, 8, 4, 4, 4, 5, 4, 4, 5, 5, 5, 4, 3, 3, 2)
 
-df <- data.frame(feature_set = c(rep("Window 10k - All cells", 20), 
-                        rep("Window 20k - All cells", 20), 
-                        rep("Window 10k - Inhibitory cells", 20)),
+df <- data.frame(feature_set = c(rep("Window 10kb - 3k cells", 20), 
+                        rep("Window 20kb - 3k cells", 20),
+                        rep("Window 10kb - 400 cells", 20)),
            hours = c(size_10k_all_cells, size_20k_all_cells, size_10k_inh))
 ```
 

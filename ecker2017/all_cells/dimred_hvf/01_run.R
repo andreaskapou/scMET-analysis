@@ -16,7 +16,7 @@ opts$anno <- c(
 )
 
 # opts$anno <- c(
-#   "window10000_step10000"#,
+#   #"window10000_step10000"#,
 #   #"window20000_step20000"
 # )
 
@@ -41,6 +41,6 @@ mclapply(X = opts$models, function(model) {
       cmd <- sprintf("Rscript 02_dimred_cluster.R --model %s --anno %s --hvf %d --outprefix %s",
                      model, an, hvf, outprefix)
       system(cmd)
-    }, mc.cores = 3)
+    }, mc.cores = 2)
   }, mc.cores = 1)
 }, mc.cores = 1)

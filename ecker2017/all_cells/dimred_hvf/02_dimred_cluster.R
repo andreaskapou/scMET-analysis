@@ -13,9 +13,11 @@ set.seed(12345)
 # Source settings
 source("../../load_settings.R")
 
+# io$basedir <- "~/datasets/ecker2017_local/mouse/"
+# io$data_parsed <- paste0(io$basedir,"/parsed_CG")
 io$fitdir <- "~/datasets/scMET_ms/ecker2017/all_cells/data/"
 io$hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/hits/"
-io$hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf_window/hits/"
+# io$hvfdir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf_window/hits/"
 opts$min.counts <- 3  # Minimum # of CpGs per feature
 
 ######################
@@ -73,6 +75,7 @@ if (args$model == "binomial") {
     setorder(-dispersion_norm_sign) %>%
     head(n = args$hvf) %>% .$id
 } else if (args$model == "random") {
+  set.seed(1234567)
   hvfs <- fit_dt[sample(NROW(fit_dt)),] %>% head(n = args$hvf) %>% .$id
 } else {
   stop("Wrong model specification")

@@ -11,7 +11,7 @@ source("../../load_settings.R")
 ## Initialize argument parser ##
 p <- ArgumentParser(description = '')
 p$add_argument('--anno',       type = "character",      help = 'Genomic context')
-p$add_argument('--chr',       type = "character",      help = 'Chromosome')
+p$add_argument('--chr',        type = "character",      help = 'Chromosome')
 p$add_argument('--outdir',     type = "character",      help = 'Output directory')
 p$add_argument('--mcmc',       action = "store_true",   help = 'Use MCMC? (default is VB)')
 p$add_argument('--test',       action = "store_true",   help = 'Testing mode')

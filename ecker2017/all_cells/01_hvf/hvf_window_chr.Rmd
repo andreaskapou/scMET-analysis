@@ -34,13 +34,26 @@ if (!dir.exists(hits_dir)) { dir.create(hits_dir, recursive = FALSE) }
 mode <- "epsilon"
 
 chr <- paste0("chr", c(seq(1, 19), "X"))
-chr <- "chr19"
+#chr <- "chr19"
 # Define genomic contexts
 annot <- list(
   c("window10000_step10000" = "Window 1kb"),
   c("window20000_step20000" = "Window 2kb")
 )
 ```
+
+<!-- # Read per chromosome and combine results -->
+<!-- ```{r} -->
+<!-- for (i in 1:length(annot)) { -->
+<!--   df <- list() -->
+<!--   for (ch in chr) { -->
+<!--     df[[ch]] <- fread(sprintf("%s/%s_%s_vb.txt.gz", data_dir, names(annot[[i]]), ch)) -->
+<!--   } -->
+<!--   df <- rbindlist(df) -->
+<!--   fwrite(df, file = sprintf("%s/%s_vb.txt.gz", data_dir, names(annot[[i]])),  -->
+<!--          row.names = FALSE, sep = "\t") -->
+<!-- } -->
+<!-- ``` -->
 
 
 # HVF analysis

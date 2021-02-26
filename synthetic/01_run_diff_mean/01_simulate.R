@@ -26,7 +26,7 @@ L <- 4
 diff_feat_prcg_mu <- 0.15
 OR_change_mu <- c(2, 3, 5)
 N_feat <- 300
-N_cpgs <- 8# c(15, 50)
+N_cpgs <- c(8, 15, 50)
 N_cells <- c(20, 50, 100, 200, 500)
 total_rep <- 10
 

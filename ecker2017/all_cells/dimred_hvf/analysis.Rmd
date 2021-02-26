@@ -29,6 +29,7 @@ annot <- c(
   "distal_H3K27ac_cortex" = "Distal H3K27ac",
   "H3K4me1_cortex" = "H3K4me1",
   "prom_2000_2000" = "Promoters"
+  #"window20000_step20000" = "Window 20kb"
 )
 # Define models
 models <- c(
@@ -95,8 +96,9 @@ for (i in names(metrics)) {
   scale_colour_manual(values = c("#E69F00", "#999999", "#56B4E9", "coral3", "steelblue4")) +
   theme_classic() +
   theme(
-    #legend.position = c(0.92, 0.82), #"right",
-    legend.position = c(0.92, 0.75), #"right",
+    legend.position = "top",
+    #legend.position = c(0.92, 0.82), #"top",
+    #legend.position = c(0.92, 0.75), #"right",
     legend.margin = margin(t = -.1, r = 0, b = -0.2, l = 0, unit = "cm"),
     legend.title = element_blank(),
     strip.text = element_text(color = "black", size = rel(1.1)),

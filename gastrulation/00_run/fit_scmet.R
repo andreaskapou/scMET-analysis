@@ -7,7 +7,7 @@ set.seed(123)
 ## Load settings
 source("../load_settings.R")
 
-# anno <- "prom_2000_2000"
+# anno <- "first_exon"
 # outdir <- "~/datasets/scMET_ms/gastrulation/data/"
 # is_test <- FALSE
 # use_mcmc <- FALSE
@@ -53,7 +53,7 @@ if (is_test) {
 # Regression on the mean methylation rate by using the CpG density as covariate.s
 X <- read_cpg_density(filename = io$cpg_density, feature_names = unique(Y$Feature),
                       annotation = anno)
-
+X <- NULL
 ######################################
 ## Fit scMET model
 ifelse(use_mcmc, "Fitting model using MCMC...", "Fitting model using VB...")

@@ -161,7 +161,7 @@ opts <- list()
 opts$rep <- seq(1, 10)
 opts$N_feat <- 300
 opts$N_cells <- c(20, 50, 100, 200, 500)
-opts$N_cpgs <- c(8, 15, 50)
+opts$N_cpgs <- c(15, 50)
 opts$OR_change_mu <- c(2, 3, 5)
 opts$efdr_m <- 0.1
 opts$eff_size_thresh <- log(1.5)
@@ -302,7 +302,7 @@ for (m in 1:length(metrics)) {
   df_res$or_mu <- factor(df_res$or_mu, levels = c(2, 3, 5), 
                          labels = c("LOR(A, B) = 2", "LOR(A, B) = 3", "LOR(A, B) = 5"))
   df_res$cpgs <- factor(df_res$cpgs, levels = c(15, 50), 
-                        labels = c("CpG poor", "CpG rich"))
+                       labels = c("CpG moderate", "CpG rich"))
   
   dt <- df_res[x %in% tot_cells]
   gg[[m]] <- ggboxplot(dt, x = "x", y = "y", fill = "Model", lwd = 0.2, outlier.size = 0.4) +
@@ -324,7 +324,7 @@ for (m in 1:length(metrics)) {
         axis.title = element_text(color = "black", size = rel(1.1))
       )
   print(gg[[m]])
-  pdf(file = paste0(out_dir, "power_diffmean_", metrics[m], ".pdf"), width = 9, height = 5.7)
+  pdf(file = paste0(out_dir, "power_diffmean_", metrics[m], ".pdf"), width = 9, height = 6.7)
   print(gg[[m]])
   dev.off()
 }

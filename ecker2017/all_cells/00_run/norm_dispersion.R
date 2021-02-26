@@ -110,19 +110,19 @@ cat("Finished!!\n")
 #     axis.text = element_text(colour = "black", size = rel(1.0)),
 #     strip.text = element_text(colour = "black", size = rel(1.2)),
 #     legend.position = "none"
-#   )
+#   ) + scale_fill_brewer(palette = "Dark2")
 #
 # out_dir <- "~/datasets/scMET_ms/ecker2017/all_cells/hvf/comparison/hits/"
 # if (!dir.exists(out_dir)) { dir.create(out_dir, recursive = TRUE) }
 #
-# pdf(paste0(out_dir, "top_hvf_normdisp.pdf"), width = 8, height = 3)
+# pdf(paste0(out_dir, "top_hvf_normdisp.pdf"), width = 6, height = 2.5)
 # print(gg)
 # dev.off()
 #
 #
 # Y_tmp <- copy(Y)
 # Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_9891", "distal_H3K27ac_cortex_6245",
-#                                     "distal_H3K27ac_cortex_24135", "distal_H3K27ac_cortex_6244"), ]
+#                                     "distal_H3K27ac_cortex_24135"), ]
 # gg <- ggplot(Y_tmp, aes(x = Feature, y = m, fill = Feature)) +
 #   geom_jitter(size = 0.8, alpha = 0.6, width = 0.25) +
 #   geom_violin(alpha = 0.5) +
@@ -139,13 +139,14 @@ cat("Finished!!\n")
 #     axis.text = element_text(colour = "black", size = rel(1.0)),
 #     strip.text = element_text(colour = "black", size = rel(1.2)),
 #     legend.position = "none"
-#   )
+#   ) + scale_fill_brewer(palette = "Dark2")
 #
-# pdf(paste0(out_dir, "scmet_hvf_not_normdisp.pdf"), width = 8, height = 3)
+# gg
+# pdf(paste0(out_dir, "scmet_hvf_not_normdisp.pdf"), width = 6, height = 2.5)
 # print(gg)
 # dev.off()
-#
-#
+
+
 # Y_tmp <- copy(Y)
 # Y_tmp <- Y_tmp %>% .[Feature %in% c("distal_H3K27ac_cortex_15339", "distal_H3K27ac_cortex_9891",
 #                                     "distal_H3K27ac_cortex_26439"), ]

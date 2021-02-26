@@ -16,11 +16,14 @@ io$outdir <- paste0(io$basedir, "/features/")
 opts$annos <- list(
   "prom_2000_2000",
   "distal_H3K27ac_cortex",
-  "H3K4me1_cortex"
+  "H3K4me1_cortex",
+  "window10000_step10000",
+  "window20000_step20000"
 )
 opts$gene_centric.annotations <- c("prom_2000_2000")
 # window length for the overlap
 opts$gene_window <- 2e4
+opts$gene_window <- 1e5
 
 ###############
 ## Load data ##
@@ -79,5 +82,5 @@ ov <- rbind(ov1,ov2)
 ##########
 ## Save ##
 ##########
-fwrite(ov, paste0(io$outdir,"/genes2features.txt.gz"), quote = FALSE,
+fwrite(ov, paste0(io$outdir,"/genes2features100K.txt.gz"), quote = FALSE,
        col.names = TRUE, row.names = FALSE, sep = "\t", na = "NA")

@@ -115,6 +115,11 @@ scatter_plot <- function(df, x = "mu", y = "gamma",
   alpha <- c(0.65, 0.45)
   names(alpha) <- c(task, "Other")
   
+  # Features that are non HVF/LVF
+  tmp <- df[df$is_hvf == FALSE, ]
+  tmp <- tmp[sample(NROW(tmp), 3000), ]
+  df <- rbind(df[df$is_hvf == TRUE, ], tmp)
+  
   gg <- ggplot(df, aes_string(x = x, y = y)) +
     geom_point(aes(fill = ifelse(is_hvf, task, "Other"),
                    size = ifelse(is_hvf, task, "Other"),
@@ -126,7 +131,7 @@ scatter_plot <- function(df, x = "mu", y = "gamma",
     theme_classic()  + 
     xlab(x_lab) + ylab(y_lab) +
     ggtitle(main) +
-    .scatter_theme(legend_pos = "right")
+    .scatter_theme(legend_pos = "none")
   return(gg)
 }
 
@@ -150,7 +155,11 @@ gg5 <- scatter_plot(df = fread(sprintf("%s/hvf_%s_epsilon.txt.gz", io$hvfdir, an
   .[, is_hvf := FALSE] %>% .[id %in% hvfs_random, is_hvf := TRUE], x = "mu", y = "gamma",
   main = "Coloured based on 'Random HVFs'")
 
-png(sprintf("%s/scmet_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2300, height = 1000)
+png(sprintf("%s/scmet_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2000, height = 1000)
+cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
+dev.off()
+
+pdf(sprintf("%s/scmet_hvf_hits_%s.pdf", io$outdir, anno_id), width = 12, height = 6)
 cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
 dev.off()
 ```
@@ -186,7 +195,7 @@ gg5 <- scatter_plot(df = fit_dt %>% .[anno == anno_id, ] %>%
   y_lab = "Gaussian variance",
   main = "Coloured based on 'Random HVFs'")
 
-png(sprintf("%s/gauss_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2300, height = 1000)
+png(sprintf("%s/gauss_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2000, height = 1000)
 cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
 dev.off()
 ```
@@ -215,7 +224,7 @@ gg5 <- scatter_plot(df = fread(sprintf("%s/%s_normdisp.txt.gz", io$fitdir, anno_
   .[, is_hvf := FALSE] %>% .[Feature %in% hvfs_random, is_hvf := TRUE], x = "mean", y = "dispersion_norm_sign",
   y_lab = "Normalised dispersion", main = "Coloured based on 'Random HVFs'")
 
-png(sprintf("%s/disp_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2300, height = 1000)
+png(sprintf("%s/disp_hvf_hits_%s.png", io$outdir, anno_id), res = 150, width = 2000, height = 1000)
 cowplot::plot_grid(gg1, gg2, gg3, gg4, gg5, ncol = 3, nrow = 2)
 dev.off()
 ```
